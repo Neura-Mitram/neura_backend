@@ -67,4 +67,4 @@ app.include_router(anonymous_router.router)
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to Aditya AI V3 backend"}
+    return {"message": "Welcome to Neura AI backend Live"}
