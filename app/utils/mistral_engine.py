@@ -1,7 +1,10 @@
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 import os
 
-hf_token = os.getenv("HF_TOKEN")
+hf_token = os.getenv("HUGGINGFACE_TOKEN")
+
+if not hf_token:
+    raise EnvironmentError("HUGGINGFACE_TOKEN not found in environment variables")
 
 tokenizer = AutoTokenizer.from_pretrained(
     "mistralai/Mistral-7B-Instruct-v0.2",
