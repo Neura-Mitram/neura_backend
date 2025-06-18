@@ -1,9 +1,9 @@
 from models.database import SessionLocal
-from models.task_reminder_model import TaskReminder
+from app.models.task_reminder_model import TaskReminder
 from models.user_model import User
 from datetime import datetime, timedelta
 from pytz import timezone
-from utils.audio_processor import synthesize_voice
+from app.utils.audio_processor import synthesize_voice
 import os
 
 def notify_due_reminders():

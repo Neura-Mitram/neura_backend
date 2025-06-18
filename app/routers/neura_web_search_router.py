@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query
-from utils.web_search import search_wikipedia
-from utils.ai_engine import generate_ai_reply
+from app.utils.web_search import search_wikipedia
+from app.utils.ai_engine import generate_ai_reply
 
 router = APIRouter()
 

@@ -2,21 +2,19 @@ import os
 import uuid
 import boto3
 from dotenv import load_dotenv
-import openai  # ✅ use this, not OpenAI()
+from faster_whisper import WhisperModel
 
 
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
+
+# Load Whisper model (tiny/intended for CPU in Hugging Face Spaces)
+whisper_model = WhisperModel("tiny", compute_type="int8")
 
 def transcribe_audio(filepath: str) -> str:
     try:
-        with open(filepath, "rb") as audio_file:
-            transcript_response = openai.Audio.transcribe(
-                model="whisper-1",
-                file=audio_file,
-                response_format="text"
-            )
-        return transcript_response.strip()
+        segments, _ = whisper_model.transcribe(filepath)
+        transcript = " ".join(segment.text for segment in segments)
+        return transcript.strip()
     except Exception as e:
         return f"[Transcription Error: {e}]"
 

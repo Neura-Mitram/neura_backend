@@ -1,8 +1,8 @@
 from typing import List
 
 from fastapi import APIRouter, Query, HTTPException, Header
-from utils.ai_engine import generate_ai_reply
-from utils.tier_check import ensure_minimum_tier
+from app.utils.ai_engine import generate_ai_reply
+from app.utils.tier_check import ensure_minimum_tier
 
 router = APIRouter()
 

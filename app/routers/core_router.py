@@ -4,12 +4,12 @@ from models.database import SessionLocal
 
 from models.user_model import User
 from models.message_model import Message
-from models.task_reminder_model import TaskReminder
+from app.models.task_reminder_model import TaskReminder
 
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.exc import IntegrityError
-from utils.tier_check import get_monthly_limit
-from utils.ai_engine import generate_ai_reply
+from app.utils.tier_check import get_monthly_limit
+from app.utils.ai_engine import generate_ai_reply
 from datetime import datetime
 
 

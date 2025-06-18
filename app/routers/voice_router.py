@@ -1,9 +1,9 @@
 from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Depends, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
-from utils.audio_processor import transcribe_audio, synthesize_voice
-from utils.ai_engine import generate_ai_reply
-from utils.tier_check import get_monthly_limit
+from app.utils.audio_processor import transcribe_audio, synthesize_voice
+from app.utils.ai_engine import generate_ai_reply
+from app.utils.tier_check import get_monthly_limit
 from models.message_model import Message
 from models.database import SessionLocal
 from models.user_model import User

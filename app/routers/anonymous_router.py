@@ -6,7 +6,7 @@ import uuid
 from models.database import SessionLocal
 from models.user_model import User
 
-from utils.trial_utils import check_trial_expiry
+from app.utils.trial_utils import check_trial_expiry
 
 router = APIRouter(prefix="/auth", tags=["Anonymous Auth"])
 
