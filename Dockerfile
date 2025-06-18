@@ -8,8 +8,10 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# ✅ Create a writable cache directory
+# ✅ Create writable cache + database directories
 RUN mkdir -p /data/hf_cache && chmod -R 777 /data/hf_cache
+RUN mkdir -p /data && chmod -R 777 /data
+
 ENV TRANSFORMERS_CACHE=/data/hf_cache
 ENV HF_HOME=/data/hf_cache
 
@@ -17,7 +19,7 @@ ENV HF_HOME=/data/hf_cache
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy your FastAPI app code
+# Copy FastAPI app
 COPY app/ /code/app
 
 # Run app

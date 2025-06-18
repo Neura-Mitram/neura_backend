@@ -3,7 +3,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 # Use SQLite for local development
-SQLALCHEMY_DATABASE_URL = "sqlite:///./neura.db"
+SQLALCHEMY_DATABASE_URL = "sqlite:////data/neura.db"
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
