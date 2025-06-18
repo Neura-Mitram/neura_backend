@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text
-from models.database import Base
+from app.models.database import Base
 import datetime
 
 class DailyCheckin(Base):

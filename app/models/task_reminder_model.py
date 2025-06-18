@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
-from .database import Base
+from app.models.database import Base
 from datetime import datetime
 
 class TaskReminder(Base):
