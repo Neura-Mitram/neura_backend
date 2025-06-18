@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 import uuid
 
-from models.database import SessionLocal
-from models.user_model import User
+from app.models.database import SessionLocal
+from app.models.user_model import User
 
 from app.utils.trial_utils import check_trial_expiry
 

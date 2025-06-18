@@ -7,15 +7,15 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 import os
 
-from models.database import engine
-from models import user_model, message_model, task_reminder_model
-from routers import core_router, neura_creator_pro_router, anonymous_router
-from routers.voice_router import router as voice_router
-from utils.audio_cleanup import delete_old_audio_files
-from utils.message_memory_cleaner import delete_old_unimportant_messages
-from utils.task_reminder_cleaner import delete_expired_task_reminders
-from utils.task_reminder_notifier import notify_due_reminders
-from utils.daily_checkin_cleaner import clean_old_checkins
+from app.models.database import engine
+from app.models import user_model, message_model, task_reminder_model
+from app.routers import core_router, neura_creator_pro_router, anonymous_router
+from app.routers.voice_router import router as voice_router
+from app.utils.audio_cleanup import delete_old_audio_files
+from app.utils.message_memory_cleaner import delete_old_unimportant_messages
+from app.utils.task_reminder_cleaner import delete_expired_task_reminders
+from app.utils.task_reminder_notifier import notify_due_reminders
+from app.utils.daily_checkin_cleaner import clean_old_checkins
 
 from pytz import timezone  # ✅ use this for interval
 

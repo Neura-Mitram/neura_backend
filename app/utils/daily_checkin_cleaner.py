@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from models.database import SessionLocal
+from app.models.database import SessionLocal
 from app.models.daily_checkin_model import DailyCheckin
 
 def clean_old_checkins():

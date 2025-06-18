@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form
 from sqlalchemy.orm import Session
-from models.database import SessionLocal
-from models.daily_checkin_model import DailyCheckin
-from utils.audio_processor import transcribe_audio
-from utils.ai_engine import generate_ai_reply
+from app.models.database import SessionLocal
+from app.models.daily_checkin_model import DailyCheckin
+from app.utils.audio_processor import transcribe_audio
+from app.utils.ai_engine import generate_ai_reply
 import datetime
 
 router = APIRouter()

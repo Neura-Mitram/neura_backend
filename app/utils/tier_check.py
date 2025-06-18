@@ -1,6 +1,6 @@
 from fastapi import HTTPException
-from models.database import SessionLocal
-from models.user_model import User
+from app.models.database import SessionLocal
+from app.models.user_model import User
 from datetime import datetime, timedelta
 
 def get_monthly_limit(tier: str) -> int:

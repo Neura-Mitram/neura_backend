@@ -1,6 +1,6 @@
-from models.database import SessionLocal
+from app.models.database import SessionLocal
 from app.models.task_reminder_model import TaskReminder
-from models.user_model import User
+from app.models.user_model import User
 from datetime import datetime, timedelta
 from pytz import timezone
 from app.utils.audio_processor import synthesize_voice

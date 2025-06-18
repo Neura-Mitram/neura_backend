@@ -4,9 +4,9 @@ from sqlalchemy.orm import Session
 from app.utils.audio_processor import transcribe_audio, synthesize_voice
 from app.utils.ai_engine import generate_ai_reply
 from app.utils.tier_check import get_monthly_limit
-from models.message_model import Message
-from models.database import SessionLocal
-from models.user_model import User
+from app.models.message_model import Message
+from app.models.database import SessionLocal
+from app.models.user_model import User
 from datetime import datetime
 import os
 import uuid

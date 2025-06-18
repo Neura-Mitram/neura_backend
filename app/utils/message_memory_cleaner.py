@@ -1,5 +1,5 @@
-from models.database import SessionLocal
-from models.message_model import Message
+from app.models.database import SessionLocal
+from app.models.message_model import Message
 from datetime import datetime, timedelta
 
 def delete_old_unimportant_messages():

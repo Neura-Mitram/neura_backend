@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from models.database import SessionLocal
+from app.models.database import SessionLocal
 
-from models.user_model import User
-from models.message_model import Message
+from app.models.user_model import User
+from app.models.message_model import Message
 from app.models.task_reminder_model import TaskReminder
 
 from pydantic import BaseModel, EmailStr
