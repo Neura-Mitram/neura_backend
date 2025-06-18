@@ -8,16 +8,16 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# ✅ Fix Hugging Face cache permissions
-ENV TRANSFORMERS_CACHE=/tmp/hf_cache
-RUN mkdir -p /tmp/hf_cache
+# ✅ Use Hugging Face's writable /data directory for model cache
+ENV TRANSFORMERS_CACHE=/data/hf_cache
+RUN mkdir -p /data/hf_cache
 
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the app
+# Copy the app code
 COPY app/ /code/app
 
-# Run the app
+# Run the FastAPI app
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
