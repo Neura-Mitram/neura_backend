@@ -59,7 +59,7 @@ async def voice_chat(
 
     # 💾 Save and transcribe uploaded audio
     filename = f"temp_{uuid.uuid4()}.wav"
-    filepath = os.path.join("audio", filename)  # <- Save to audio/ folder
+    filepath = os.path.join("/data/audio", filename)  # <- Save to audio/ folder
     with open(filepath, "wb") as f:
         f.write(await file.read())
 
@@ -116,7 +116,7 @@ async def voice_chat(
 
 @router.get("/get-audio/{filename}")
 async def get_audio(filename: str, request: Request):
-    file_path = os.path.join("audio", filename)  # Ensure audio files are saved here
+    file_path = os.path.join("/data/audio", filename)  # Ensure audio files are saved here
 
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Audio file not found")

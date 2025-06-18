@@ -1,7 +1,7 @@
 import os
 import time
 
-def delete_old_audio_files(folder="temp_audio", age_limit_minutes=15):
+def delete_old_audio_files(folder="/data/temp_audio", age_limit_minutes=15):
     now = time.time()
     cutoff = now - (age_limit_minutes * 60)
 

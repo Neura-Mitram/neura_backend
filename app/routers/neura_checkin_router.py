@@ -27,7 +27,7 @@ async def daily_checkin(
 ):
     voice_summary = None
     if voice_note:
-        temp_path = f"temp_audio/{voice_note.filename}"
+        temp_path = f"/data/temp_audio/{voice_note.filename}"
         with open(temp_path, "wb") as f:
             f.write(await voice_note.read())
 

@@ -52,10 +52,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 # Ensure temp audio folder exists
-os.makedirs("temp_audio", exist_ok=True)
+os.makedirs("/data/temp_audio", exist_ok=True)
 
 # Serve audio files from /get-temp-audio/
-app.mount("/get-temp-audio", StaticFiles(directory="temp_audio"), name="audio")
+app.mount("/get-temp-audio", StaticFiles(directory="/data/temp_audio"), name="audio")
 
 # Include routers
 app.include_router(voice_router)
