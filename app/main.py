@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from routers import neura_web_search_router, neura_checkin_router
+from app.routers import neura_web_search_router, neura_checkin_router
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
