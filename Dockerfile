@@ -11,6 +11,7 @@ RUN apt-get update && \
 # ✅ Create a writable cache directory
 RUN mkdir -p /data/hf_cache && chmod -R 777 /data/hf_cache
 ENV TRANSFORMERS_CACHE=/data/hf_cache
+ENV HF_HOME=/data/hf_cache
 
 # Install Python dependencies
 COPY requirements.txt .
