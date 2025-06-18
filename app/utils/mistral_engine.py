@@ -8,6 +8,7 @@ if not hf_token:
 
 tokenizer = AutoTokenizer.from_pretrained(
     "mistralai/Mistral-7B-Instruct-v0.2",
+    use_fast=False,  # ✅ Prevent tokenizer crash
     token=hf_token
 )
 model = AutoModelForCausalLM.from_pretrained(
