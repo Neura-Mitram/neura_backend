@@ -2,22 +2,22 @@ FROM python:3.10.9-slim
 
 WORKDIR /code
 
-# Install system dependencies
+# System dependencies
 RUN apt-get update && \
     apt-get install -y ffmpeg && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# ✅ Use Hugging Face's writable /data directory for model cache
+# ✅ Create a writable cache directory
+RUN mkdir -p /data/hf_cache && chmod -R 777 /data/hf_cache
 ENV TRANSFORMERS_CACHE=/data/hf_cache
-RUN mkdir -p /data/hf_cache
 
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the app code
+# Copy your FastAPI app code
 COPY app/ /code/app
 
-# Run the FastAPI app
+# Run app
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
