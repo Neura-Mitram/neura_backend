@@ -49,7 +49,14 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown()
 
 # Create FastAPI app with lifespan
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    title="Neura Smart Assistant API",
+    description="Voice & Text AI backend",
+    version="1.0"
+)
 
 # Ensure temp audio folder exists
 os.makedirs("/data/temp_audio", exist_ok=True)
