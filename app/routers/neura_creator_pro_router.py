@@ -3,15 +3,28 @@ from typing import List
 from fastapi import APIRouter, Query, HTTPException, Header
 from app.utils.ai_engine import generate_ai_reply
 from app.utils.tier_check import ensure_minimum_tier
+from app.utils.jwt_utils import verify_access_token
+from fastapi import APIRouter, Query, HTTPException, Header, Depends
+
 
 router = APIRouter()
+
+# JWT token requirement
+def require_token(authorization: str = Header(...)):
+    token = authorization.replace("Bearer ", "")
+    return verify_access_token(token)
+
 
 @router.get("/neura/generate-caption")
 def generate_caption(
     user_id: int = Query(..., description="User ID"),
     topic: str = Query(..., description="What is the post about?"),
-    tone: str = Query("engaging", description="Tone like 'funny', 'emotional', 'motivational'")
+    tone: str = Query("engaging", description="Tone like 'funny', 'emotional', 'motivational'"),
+    user_data: dict = Depends(require_token)
 ):
+    if str(user_data["sub"]) != str(user_id):
+        raise HTTPException(status_code=401, detail="Token/user mismatch")
+
     # ✅ Restrict access to Tier 3 and above
     ensure_minimum_tier(user_id, "Tier 3")
 
@@ -35,8 +48,12 @@ def generate_youtube_script_v2(
     topic: str = Query(..., description="Main topic of the video"),
     tone: str = Query("inspiring", description="e.g., stoic, emotional, casual, professional"),
     duration: str = Query("medium", description="short (1–2 min), medium (3–5 min), long (8–10 min)"),
-    audience: str = Query("general", description="Target audience, e.g., creators, students, entrepreneurs")
+    audience: str = Query("general", description="Target audience, e.g., creators, students, entrepreneurs"),
+    user_data: dict = Depends(require_token)
 ):
+    if str(user_data["sub"]) != str(user_id):
+        raise HTTPException(status_code=401, detail="Token/user mismatch")
+
     ensure_minimum_tier(user_id, "Tier 3")
 
     prompt = f"""
@@ -78,13 +95,18 @@ The script must feel authentic, not robotic. Make it emotionally engaging.
         raise HTTPException(status_code=500, detail=f"Script generation failed: {str(e)}")
 
 
+
 @router.get("/neura/generate-draft")
 def generate_long_form_draft(
     user_id: int = Query(..., description="User ID"),
     topic: str = Query(..., description="Topic for blog or LinkedIn post"),
     audience: str = Query("general", description="Target reader: creators, leaders, students, etc."),
-    tone: str = Query("thoughtful", description="Tone like 'inspiring', 'professional', 'personal'")
+    tone: str = Query("thoughtful", description="Tone like 'inspiring', 'professional', 'personal'"),
+    user_data: dict = Depends(require_token)
 ):
+    if str(user_data["sub"]) != str(user_id):
+        raise HTTPException(status_code=401, detail="Token/user mismatch")
+
     ensure_minimum_tier(user_id, "Tier 3")
 
     prompt = f"""
@@ -117,10 +139,11 @@ Make it sound human, like someone reflecting on life. Include paragraph breaks a
 def seo_suggestions(
     user_id: int = Query(..., description="User ID"),
     platform: str = Query("blog", description="Platform: blog, youtube, instagram"),
-    content: str = Query(..., description="Paste the content you want optimized")
+    content: str = Query(..., description="Paste the content you want optimized"),
+    user_data: dict = Depends(require_token)
 ):
-    from utils.tier_check import ensure_minimum_tier
-    from utils.ai_engine import generate_ai_reply
+    if str(user_data["sub"]) != str(user_id):
+        raise HTTPException(status_code=401, detail="Token/user mismatch")
 
     ensure_minimum_tier(user_id, "Tier 3")
 
@@ -154,8 +177,11 @@ def generate_email_helper(
     use_case: str = Query(..., description="Type: reply, summarize, outreach, followup"),
     context: str = Query(...),
     tone: str = Query("professional"),
-    goal: str = Query("clarify, close a deal, get a reply")
+    goal: str = Query("clarify, close a deal, get a reply"),
+    user_data: dict = Depends(require_token)
 ):
+    if str(user_data["sub"]) != str(user_id):
+        raise HTTPException(status_code=401, detail="Token/user mismatch")
 
     ensure_minimum_tier(user_id, "Tier 3")
 
@@ -187,29 +213,30 @@ def time_block_planner(
     user_id: int = Header(...),
     tasks: List[str] = Query(..., description="List of tasks or goals"),
     total_hours: float = Query(8.0, description="Hours available today"),
-    focus_mode: str = Query("balanced", description="Options: deep, flexible, balanced")
+    focus_mode: str = Query("balanced", description="Options: deep, flexible, balanced"),
+    user_data: dict = Depends(require_token)
 ):
-    from utils.tier_check import ensure_minimum_tier
-    from utils.ai_engine import generate_ai_reply
+    if str(user_data["sub"]) != str(user_id):
+        raise HTTPException(status_code=401, detail="Token/user mismatch")
 
     ensure_minimum_tier(user_id, "Tier 2")
 
     prompt = f"""
-You're a time management coach.
-
-Plan a smart time-block schedule for today.
-
-- User's focus mode: {focus_mode}
-- Total hours available: {total_hours}
-- Tasks: {', '.join(tasks)}
-
-Instructions:
-- Prioritize tasks
-- Suggest start/end times or durations
-- Break large tasks if needed
-- Include small breaks if focus mode is 'deep'
-- Format the schedule clearly
-"""
+                    You're a time management coach.
+                    
+                    Plan a smart time-block schedule for today.
+                    
+                    - User's focus mode: {focus_mode}
+                    - Total hours available: {total_hours}
+                    - Tasks: {', '.join(tasks)}
+                    
+                    Instructions:
+                    - Prioritize tasks
+                    - Suggest start/end times or durations
+                    - Break large tasks if needed
+                    - Include small breaks if focus mode is 'deep'
+                    - Format the schedule clearly
+            """
 
     try:
         plan = generate_ai_reply(prompt)

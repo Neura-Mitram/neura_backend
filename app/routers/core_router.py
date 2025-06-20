@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from sqlalchemy.orm import Session
 from app.models.database import SessionLocal
 
@@ -12,9 +12,9 @@ from app.utils.tier_check import get_monthly_limit
 from app.utils.ai_engine import generate_ai_reply
 from datetime import datetime
 
+from app.utils.jwt_utils import verify_access_token
 
 router = APIRouter()
-
 
 # Dependency to get DB session
 def get_db():
@@ -24,41 +24,44 @@ def get_db():
     finally:
         db.close()
 
+# JWT token requirement
+def require_token(authorization: str = Header(...)):
+    token = authorization.replace("Bearer ", "")
+    return verify_access_token(token)
 
 class TaskReminderCreate(BaseModel):
-     user_id: int
-     title: str
-     due_time: datetime
-     recurrence_type: str = "once"  # Options: once, daily, weekly
+    user_id: int
+    title: str
+    due_time: datetime
+    recurrence_type: str = "once"
 
 class TaskReminderUpdate(BaseModel):
     id: int
     title: str
     datetime: datetime
-    repeat: str  # "once", "daily", "weekly"
-
+    repeat: str
 
 class ChatInput(BaseModel):
     user_id: int
     message: str
 
 @router.post("/chat")
-def chat_with_aditya(data: ChatInput, db: Session = Depends(get_db)):
+def chat_with_aditya(data: ChatInput, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+    if str(user_data["sub"]) != str(data.user_id):
+        raise HTTPException(status_code=401, detail="Token/user mismatch")
+
     user = db.query(User).filter(User.id == data.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # ✨ Detect if user message is important (basic keyword detection)
     important_keywords = ["remember", "goal", "habit", "remind", "dream", "mission"]
     is_important = any(word in data.message.lower() for word in important_keywords)
 
-    # 🔁 Auto-reset GPT usage counter if month has changed
     now = datetime.utcnow()
     if user.last_gpt_reset.month != now.month or user.last_gpt_reset.year != now.year:
         user.monthly_gpt_count = 0
         user.last_gpt_reset = now
 
-    # 🔒 Enforce GPT monthly tier limit
     monthly_limit = get_monthly_limit(user.tier)
     if user.monthly_gpt_count >= monthly_limit:
         db.commit()
@@ -70,7 +73,6 @@ def chat_with_aditya(data: ChatInput, db: Session = Depends(get_db)):
             "messages_remaining": 0
         }
 
-    # 🧠 Save user message if memory is enabled
     if user.memory_enabled:
         user_msg = Message(
             user_id=user.id,
@@ -80,7 +82,6 @@ def chat_with_aditya(data: ChatInput, db: Session = Depends(get_db)):
         )
         db.add(user_msg)
 
-    # 🧠 Use memory context if enabled
     chat_history = ""
     if user.memory_enabled:
         past_msgs = db.query(Message) \
@@ -96,10 +97,8 @@ def chat_with_aditya(data: ChatInput, db: Session = Depends(get_db)):
     else:
         full_prompt = data.message
 
-    # 🤖 Generate GPT reply
     assistant_reply = generate_ai_reply(full_prompt)
 
-    # 🧠 Save assistant reply if memory is enabled
     if user.memory_enabled:
         ai_msg = Message(
             user_id=user.id,
@@ -109,7 +108,6 @@ def chat_with_aditya(data: ChatInput, db: Session = Depends(get_db)):
         )
         db.add(ai_msg)
 
-    # ✅ Update GPT usage count
     user.monthly_gpt_count += 1
     db.commit()
 
@@ -122,8 +120,10 @@ def chat_with_aditya(data: ChatInput, db: Session = Depends(get_db)):
     }
 
 @router.get("/memory-log")
-def get_memory_log(user_id: int, limit: int = Query(10, ge=1, le=50),
-    db: Session = Depends(get_db)):
+def get_memory_log(user_id: int, limit: int = Query(10, ge=1, le=50), db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+    if str(user_data["sub"]) != str(user_id):
+        raise HTTPException(status_code=401, detail="Token/user mismatch")
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -136,7 +136,7 @@ def get_memory_log(user_id: int, limit: int = Query(10, ge=1, le=50),
         .order_by(Message.timestamp.desc()) \
         .limit(limit).all()
 
-    messages.reverse()  # show oldest first for natural reading
+    messages.reverse()
 
     return {
         "email": user.email,
@@ -152,7 +152,10 @@ def get_memory_log(user_id: int, limit: int = Query(10, ge=1, le=50),
     }
 
 @router.post("/add-task-reminder")
-def add_reminder(reminder_data: TaskReminderCreate, db: Session = Depends(get_db)):
+def add_reminder(reminder_data: TaskReminderCreate, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+    if str(user_data["sub"]) != str(reminder_data.user_id):
+        raise HTTPException(status_code=401, detail="Token/user mismatch")
+
     user = db.query(User).filter(User.id == reminder_data.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -176,7 +179,10 @@ def add_reminder(reminder_data: TaskReminderCreate, db: Session = Depends(get_db
     }}
 
 @router.get("/get-task-reminder")
-def get_reminders(user_id: int, db: Session = Depends(get_db)):
+def get_reminders(user_id: int, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+    if str(user_data["sub"]) != str(user_id):
+        raise HTTPException(status_code=401, detail="Token/user mismatch")
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -193,22 +199,30 @@ def get_reminders(user_id: int, db: Session = Depends(get_db)):
             } for r in reminders
         ]
     }
-
-@router.delete("/delete-task-reminder/{task-reminder_id}")
-def delete_reminder(task_reminder_id: int, db: Session = Depends(get_db)):
+@router.delete("/delete-task-reminder/{task_reminder_id}")
+def delete_reminder(task_reminder_id: int, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
     reminder = db.query(TaskReminder).filter(TaskReminder.id == task_reminder_id).first()
     if not reminder:
         raise HTTPException(status_code=404, detail="Task Reminder not found")
+
+    # ✅ Check if reminder belongs to user from token
+    if reminder.user_id != int(user_data["sub"]):
+        raise HTTPException(status_code=403, detail="Not authorized to delete this reminder")
 
     db.delete(reminder)
     db.commit()
     return {"message": "Task Reminder deleted"}
 
+
 @router.put("/update-task-reminder")
-def update_reminder(reminder_data: TaskReminderUpdate, db: Session = Depends(get_db)):
+def update_reminder(reminder_data: TaskReminderUpdate, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
     reminder = db.query(TaskReminder).filter(TaskReminder.id == reminder_data.id).first()
     if not reminder:
         raise HTTPException(status_code=404, detail="Task Reminder not found")
+
+    # ✅ Check if reminder belongs to user from token
+    if reminder.user_id != int(user_data["sub"]):
+        raise HTTPException(status_code=403, detail="Not authorized to update this reminder")
 
     reminder.title = reminder_data.title
     reminder.due_time = reminder_data.datetime

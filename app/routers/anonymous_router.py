@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 from datetime import datetime
 import uuid
@@ -7,6 +7,7 @@ from app.models.database import SessionLocal
 from app.models.user_model import User
 
 from app.utils.trial_utils import check_trial_expiry
+from app.utils.jwt_utils import create_access_token, verify_access_token  # ✅ JWT added
 
 router = APIRouter(prefix="/auth", tags=["Anonymous Auth"])
 
@@ -18,6 +19,11 @@ def get_db():
     finally:
         db.close()
 
+# ✅ Dependency to verify token and return payload
+def require_token(authorization: str = Header(...)):
+    token = authorization.replace("Bearer ", "")
+    return verify_access_token(token)
+
 @router.post("/anonymous-login")
 def anonymous_login(device_id: str, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.temp_uid == device_id).first()
@@ -28,12 +34,14 @@ def anonymous_login(device_id: str, db: Session = Depends(get_db)):
         else:
             trial_info = {"trial_expired": False, "days_used": 0, "days_left": 7}
 
-        # ❌ Block usage if trial expired and tier is still "Tier 1"
         if trial_info["trial_expired"] and user.tier == "Tier 1":
             raise HTTPException(status_code=403, detail="🚫 Trial expired. Please upgrade to continue.")
 
+        access_token = create_access_token({"sub": user.temp_uid})
+
         return {
             "message": "🔁 Returning user",
+            "token": access_token,
             "user": {
                 "device_id": user.temp_uid,
                 "ai_name": user.ai_name,
@@ -45,7 +53,6 @@ def anonymous_login(device_id: str, db: Session = Depends(get_db)):
             }
         }
 
-    # 🆕 New user
     new_user = User(
         temp_uid=device_id,
         trial_start=datetime.utcnow(),
@@ -55,8 +62,11 @@ def anonymous_login(device_id: str, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
 
+    access_token = create_access_token({"sub": new_user.temp_uid})
+
     return {
         "message": "🆕 New anonymous user created",
+        "token": access_token,
         "user": {
             "device_id": new_user.temp_uid,
             "ai_name": new_user.ai_name,
@@ -69,7 +79,10 @@ def anonymous_login(device_id: str, db: Session = Depends(get_db)):
     }
 
 @router.post("/upgrade-tier")
-def upgrade_anonymous_tier(device_id: str, new_tier: str, payment_key: str, db: Session = Depends(get_db)):
+def upgrade_anonymous_tier(device_id: str, new_tier: str, payment_key: str, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+    if user_data["sub"] != device_id:
+        raise HTTPException(status_code=401, detail="Token/device mismatch")
+
     if new_tier not in ["Tier 2", "Tier 3"]:
         raise HTTPException(status_code=400, detail="Invalid tier. Choose 'Tier 2' or 'Tier 3'.")
 
@@ -92,7 +105,10 @@ def upgrade_anonymous_tier(device_id: str, new_tier: str, payment_key: str, db: 
     }
 
 @router.post("/downgrade-tier")
-def downgrade_tier(device_id: str, new_tier: str, db: Session = Depends(get_db)):
+def downgrade_tier(device_id: str, new_tier: str, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+    if user_data["sub"] != device_id:
+        raise HTTPException(status_code=401, detail="Token/device mismatch")
+
     if new_tier not in ["Tier 2"]:
         raise HTTPException(status_code=400, detail="❌ Downgrade only allowed to Tier 2 (from Tier 3).")
 
@@ -113,7 +129,10 @@ def downgrade_tier(device_id: str, new_tier: str, db: Session = Depends(get_db))
     }
 
 @router.get("/profile")
-def get_user_profile(device_id: str, db: Session = Depends(get_db)):
+def get_user_profile(device_id: str, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+    if user_data["sub"] != device_id:
+        raise HTTPException(status_code=401, detail="Token/device mismatch")
+
     user = db.query(User).filter(User.temp_uid == device_id).first()
 
     if not user:
@@ -122,7 +141,7 @@ def get_user_profile(device_id: str, db: Session = Depends(get_db)):
     is_upgraded = user.tier in ["Tier 2", "Tier 3"]
 
     return {
-        "user_id": user.id,   # ✅ ADD THIS
+        "user_id": user.id,
         "device_id": user.temp_uid,
         "ai_name": user.ai_name,
         "voice": user.voice,
@@ -132,7 +151,10 @@ def get_user_profile(device_id: str, db: Session = Depends(get_db)):
     }
 
 @router.post("/update-onboarding")
-def update_onboarding(device_id: str, ai_name: str, voice: str, db: Session = Depends(get_db)):
+def update_onboarding(device_id: str, ai_name: str, voice: str, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+    if user_data["sub"] != device_id:
+        raise HTTPException(status_code=401, detail="Token/device mismatch")
+
     user = db.query(User).filter(User.temp_uid == device_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
