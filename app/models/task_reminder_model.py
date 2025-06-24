@@ -7,9 +7,9 @@ class TaskReminder(Base):
     __tablename__ = "task_reminders"  # ✅ FIXED
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     title = Column(String, nullable=False)
-    due_time = Column(DateTime, nullable=False)
+    due_time = Column(DateTime, nullable=False, index=True)
     is_recurring = Column(Boolean, default=False)
     recurrence_type = Column(String, nullable=True)  # 'daily', 'weekly', etc.
     created_at = Column(DateTime, default=datetime.utcnow)

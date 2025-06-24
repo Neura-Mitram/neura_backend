@@ -1,20 +1,29 @@
-from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Depends, Request, Header
+from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Depends, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from datetime import datetime
+from app.models.database import SessionLocal
+from app.models.user_model import User, TierLevel
+from app.models.message_model import Message
+from app.models.generated_audio_model import GeneratedAudio
 from app.utils.audio_processor import transcribe_audio, synthesize_voice
 from app.utils.ai_engine import generate_ai_reply
+from app.utils.auth_utils import require_token, ensure_token_user_match
 from app.utils.tier_check import get_monthly_limit
-from app.utils.jwt_utils import verify_access_token
-from app.models.message_model import Message
-from app.models.database import SessionLocal
-from app.models.user_model import User
-from datetime import datetime
 import os
 import uuid
 import mimetypes
 
-router = APIRouter()
 
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from app.utils.rate_limit_utils import get_tier_limit
+
+router = APIRouter()
+ASSISTANT_NAME = "Neura"
+
+# ---------------------- DB SESSION ----------------------
 def get_db():
     db = SessionLocal()
     try:
@@ -22,19 +31,17 @@ def get_db():
     finally:
         db.close()
 
-def require_token(authorization: str = Header(...)):
-    token = authorization.replace("Bearer ", "")
-    return verify_access_token(token)
 
-@router.post("/voice-chat")
-async def voice_chat(
+# ---------------------- VOICE CHAT ENDPOINT ----------------------
+@limiter.limit(get_tier_limit)
+@router.post("/voice-chat-with-neura")
+async def voice_chat_with_neura(
     user_id: int = Form(...),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     user_data: dict = Depends(require_token)
 ):
-    if str(user_data["sub"]) != str(user_id):
-        raise HTTPException(status_code=401, detail="Token/user mismatch")
+    ensure_token_user_match(user_data["sub"], user_id)
 
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -49,43 +56,67 @@ async def voice_chat(
         user.last_voice_reset = now
 
     monthly_limit = get_monthly_limit(user.tier)
-    if user.monthly_gpt_count >= monthly_limit:
-        db.commit()
-        return {
-            "reply": f"⚠️ You've used your {monthly_limit} voice chats for {user.tier} this month.",
-            "memory_enabled": user.memory_enabled,
-            "important": False,
-            "messages_used_this_month": user.monthly_voice_count,
-            "messages_remaining": 0,
-            "audio_url": None
-        }
+
+    if user.tier == TierLevel.free:
+        total_usage = user.monthly_gpt_count + user.monthly_voice_count
+        if total_usage >= monthly_limit:
+            db.commit()
+            return {
+                "reply": f"⚠️ You've used your {monthly_limit} total messages this month. Upgrade your plan to get more access.",
+                "memory_enabled": user.memory_enabled,
+                "important": False,
+                "messages_used_this_month": total_usage,
+                "messages_remaining": 0,
+                "audio_url": None
+            }
+    else:
+        if user.monthly_voice_count >= monthly_limit:
+            db.commit()
+            return {
+                "reply": f"⚠️ You've used your {monthly_limit} voice messages for {user.tier} this month. Upgrade your plan to get more access.",
+                "memory_enabled": user.memory_enabled,
+                "important": False,
+                "messages_used_this_month": user.monthly_voice_count,
+                "messages_remaining": 0,
+                "audio_url": None
+            }
 
     filename = f"temp_{uuid.uuid4()}.wav"
     filepath = os.path.join("/data/audio", filename)
     with open(filepath, "wb") as f:
         f.write(await file.read())
 
-    transcript = transcribe_audio(filepath)
-    os.remove(filepath)
+    try:
+        transcript = transcribe_audio(filepath)
+        os.remove(filepath)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
 
     important_keywords = ["remember", "goal", "habit", "remind", "dream", "mission"]
     is_important = any(word in transcript.lower() for word in important_keywords)
 
-    chat_history = ""
     if user.memory_enabled:
         past_msgs = db.query(Message).filter(Message.user_id == user.id).order_by(Message.timestamp.desc()).limit(10).all()
         past_msgs.reverse()
-        for msg in past_msgs:
-            role = "User" if msg.sender == "user" else "Aditya"
-            chat_history += f"{role}: {msg.message}\n"
-        full_prompt = f"{chat_history}User: {transcript}\nAditya:"
+        chat_history = "".join([
+            f"{'User' if msg.sender == 'user' else ASSISTANT_NAME}: {msg.message}\n"
+            for msg in past_msgs
+        ])
+        full_prompt = f"{chat_history}User: {transcript}\n{ASSISTANT_NAME}:"
     else:
         full_prompt = transcript
 
-    assistant_reply = generate_ai_reply(full_prompt)
+    try:
+        assistant_reply = generate_ai_reply(full_prompt)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {str(e)}")
 
     voice_gender = user.voice or "male"
-    audio_output_path = synthesize_voice(assistant_reply, gender=voice_gender)
+
+    try:
+        audio_output_path = synthesize_voice(assistant_reply, gender=voice_gender)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Voice synthesis failed: {str(e)}")
 
     if user.memory_enabled:
         db.add_all([
@@ -93,7 +124,13 @@ async def voice_chat(
             Message(user_id=user.id, sender="assistant", message=assistant_reply, important=False),
         ])
 
-    user.monthly_gpt_count += 1
+    generated_audio = GeneratedAudio(
+        user_id=user.id,
+        filename=os.path.basename(audio_output_path),
+    )
+    db.add(generated_audio)
+
+    user.monthly_voice_count += 1
     db.commit()
 
     return {
@@ -105,19 +142,34 @@ async def voice_chat(
         "audio_url": f"/get-audio/{os.path.basename(audio_output_path)}"
     }
 
-@router.get("/get-audio/{filename}")
-async def get_audio(
-    filename: str,
+
+# ---------------------- AUDIO STREAMING ENDPOINT ----------------------
+class GetAudioRequest(BaseModel):
+    user_id: int
+    filename: str
+
+@limiter.limit(get_tier_limit)
+@router.post("/get-voice-chat-audio")
+async def get_voice_chat_audio(
+    payload: GetAudioRequest,
     request: Request,
-    user_data: dict = Depends(require_token)  # 🔐 Enforces JWT verification
+    db: Session = Depends(get_db),
+    user_data: dict = Depends(require_token)
 ):
-    if str(user_data["sub"]) != str(user_id):
-        raise HTTPException(status_code=401, detail="Token/user mismatch")
+    ensure_token_user_match(user_data["sub"], payload.user_id)
 
-    file_path = os.path.join("/data/audio", filename)
+    audio_record = (
+        db.query(GeneratedAudio)
+        .filter(GeneratedAudio.user_id == payload.user_id)
+        .filter(GeneratedAudio.filename == payload.filename)
+        .first()
+    )
+    if not audio_record:
+        raise HTTPException(status_code=404, detail="Audio not found or access denied")
 
+    file_path = os.path.join("/data/audio", payload.filename)
     if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Audio file not found")
+        raise HTTPException(status_code=404, detail="Audio file missing on disk")
 
     file_size = os.path.getsize(file_path)
     content_type, _ = mimetypes.guess_type(file_path)
@@ -128,11 +180,9 @@ async def get_audio(
         start = int(range_header.replace("bytes=", "").split("-")[0])
         end = file_size - 1
         length = end - start + 1
-
         with open(file_path, "rb") as f:
             f.seek(start)
             data = f.read(length)
-
         return StreamingResponse(
             iter([data]),
             status_code=206,
@@ -143,5 +193,4 @@ async def get_audio(
                 "Content-Length": str(length),
             },
         )
-    else:
-        return FileResponse(file_path, media_type=content_type)
+    return FileResponse(file_path, media_type=content_type)

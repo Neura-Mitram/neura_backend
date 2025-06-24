@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from sqlalchemy.orm import Session
 from app.models.database import SessionLocal
 
-from app.models.user_model import User
+from app.models.user_model import User, TierLevel
+from app.utils.auth_utils import ensure_token_user_match, require_token, build_chat_history, get_memory_messages
 from app.models.message_model import Message
 from app.models.task_reminder_model import TaskReminder
 
@@ -12,9 +13,14 @@ from app.utils.tier_check import get_monthly_limit
 from app.utils.ai_engine import generate_ai_reply
 from datetime import datetime
 
-from app.utils.jwt_utils import verify_access_token
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from app.utils.rate_limit_utils import get_tier_limit
+
 
 router = APIRouter()
+
+ASSISTANT_NAME = "Neura"  # 🔄 changeable assistant name for prompt
 
 # Dependency to get DB session
 def get_db():
@@ -24,90 +30,83 @@ def get_db():
     finally:
         db.close()
 
-# JWT token requirement
-def require_token(authorization: str = Header(...)):
-    token = authorization.replace("Bearer ", "")
-    return verify_access_token(token)
 
-class TaskReminderCreate(BaseModel):
-    user_id: int
-    title: str
-    due_time: datetime
-    recurrence_type: str = "once"
-
-class TaskReminderUpdate(BaseModel):
-    id: int
-    title: str
-    datetime: datetime
-    repeat: str
-
-class ChatInput(BaseModel):
+class ChatRequest(BaseModel):
     user_id: int
     message: str
 
-@router.post("/chat")
-def chat_with_aditya(data: ChatInput, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
-    if str(user_data["sub"]) != str(data.user_id):
-        raise HTTPException(status_code=401, detail="Token/user mismatch")
+@limiter.limit(get_tier_limit)
+@router.post("/chat-with-neura")
+def chat_with_neura(payload: ChatRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
 
-    user = db.query(User).filter(User.id == data.user_id).first()
+    # 🔐 Ensure token-user match
+    ensure_token_user_match(user_data["sub"], payload.user_id)
+
+    user = db.query(User).filter(User.id == payload.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # 🧠 Tag important messages
     important_keywords = ["remember", "goal", "habit", "remind", "dream", "mission"]
-    is_important = any(word in data.message.lower() for word in important_keywords)
+    is_important = any(word in payload.message.lower() for word in important_keywords)
 
+    # 📅 Monthly GPT count reset
     now = datetime.utcnow()
     if user.last_gpt_reset.month != now.month or user.last_gpt_reset.year != now.year:
         user.monthly_gpt_count = 0
         user.last_gpt_reset = now
 
+    # ⛔ Tier check logic (combined for Free, separate for Basic/Pro)
     monthly_limit = get_monthly_limit(user.tier)
-    if user.monthly_gpt_count >= monthly_limit:
-        db.commit()
-        return {
-            "reply": f"⚠️ You've used your {monthly_limit} GPT messages for {user.tier} this month. Upgrade your plan to get more access.",
-            "memory_enabled": user.memory_enabled,
-            "important": is_important,
-            "messages_used_this_month": user.monthly_gpt_count,
-            "messages_remaining": 0
-        }
 
+    if user.tier == TierLevel.free:
+        total_usage = user.monthly_gpt_count + user.monthly_voice_count
+        if total_usage >= monthly_limit:
+            db.commit()
+            return {
+                "reply": f"⚠️ You've used your {monthly_limit} total messages this month. Upgrade your plan to get more access.",
+                "memory_enabled": user.memory_enabled,
+                "important": is_important,
+                "messages_used_this_month": total_usage,
+                "messages_remaining": 0
+            }
+    else:
+        if user.monthly_gpt_count >= monthly_limit:
+            db.commit()
+            return {
+                "reply": f"⚠️ You've used your {monthly_limit} text messages for {user.tier} this month. Upgrade your plan to get more access.",
+                "memory_enabled": user.memory_enabled,
+                "important": is_important,
+                "messages_used_this_month": user.monthly_gpt_count,
+                "messages_remaining": 0
+            }
+
+    # 💬 Save user message and build context
     if user.memory_enabled:
-        user_msg = Message(
+        db.add(Message(
             user_id=user.id,
             sender="user",
-            message=data.message,
+            message=payload.message,
             important=is_important
-        )
-        db.add(user_msg)
-
-    chat_history = ""
-    if user.memory_enabled:
-        past_msgs = db.query(Message) \
-            .filter(Message.user_id == user.id) \
-            .order_by(Message.timestamp.desc()) \
-            .limit(10).all()
-        past_msgs.reverse()
-
-        for msg in past_msgs:
-            role = "User" if msg.sender == "user" else "Aditya"
-            chat_history += f"{role}: {msg.message}\n"
-        full_prompt = f"{chat_history}User: {data.message}\nAditya:"
+        ))
+        chat_history = build_chat_history(db, user.id)
+        full_prompt = f"{chat_history}User: {payload.message}\n{ASSISTANT_NAME}:"
     else:
-        full_prompt = data.message
+        full_prompt = payload.message
 
+    # 🤖 Generate response
     assistant_reply = generate_ai_reply(full_prompt)
 
+    # 💬 Save assistant message
     if user.memory_enabled:
-        ai_msg = Message(
+        db.add(Message(
             user_id=user.id,
             sender="assistant",
             message=assistant_reply,
             important=False
-        )
-        db.add(ai_msg)
+        ))
 
+    # ✅ Update counter
     user.monthly_gpt_count += 1
     db.commit()
 
@@ -119,27 +118,26 @@ def chat_with_aditya(data: ChatInput, db: Session = Depends(get_db), user_data: 
         "messages_remaining": monthly_limit - user.monthly_gpt_count
     }
 
-@router.get("/memory-log")
-def get_memory_log(user_id: int, limit: int = Query(10, ge=1, le=50), db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
-    if str(user_data["sub"]) != str(user_id):
-        raise HTTPException(status_code=401, detail="Token/user mismatch")
 
-    user = db.query(User).filter(User.id == user_id).first()
+class MemoryLogRequest(BaseModel):
+    user_id: int
+    limit: int = 10
+
+@limiter.limit(get_tier_limit)
+@router.post("/memory-log")
+def get_memory_log(payload: MemoryLogRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+    ensure_token_user_match(user_data["sub"], payload.user_id)
+
+    user = db.query(User).filter(User.id == payload.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     if not user.memory_enabled:
         return {"message": "Memory is disabled for this user."}
 
-    messages = db.query(Message) \
-        .filter(Message.user_id == user.id) \
-        .order_by(Message.timestamp.desc()) \
-        .limit(limit).all()
-
-    messages.reverse()
+    messages = get_memory_messages(db, user.id, payload.limit)
 
     return {
-        "email": user.email,
         "memory_enabled": user.memory_enabled,
         "messages": [
             {
@@ -151,21 +149,28 @@ def get_memory_log(user_id: int, limit: int = Query(10, ge=1, le=50), db: Sessio
         ]
     }
 
-@router.post("/add-task-reminder")
-def add_reminder(reminder_data: TaskReminderCreate, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
-    if str(user_data["sub"]) != str(reminder_data.user_id):
-        raise HTTPException(status_code=401, detail="Token/user mismatch")
 
-    user = db.query(User).filter(User.id == reminder_data.user_id).first()
+class AddTaskReminderRequest(BaseModel):
+    user_id: int
+    title: str
+    due_time: datetime
+    recurrence_type: str = "once"
+
+@limiter.limit(get_tier_limit)
+@router.post("/add-task-reminder")
+def add_reminder(payload: AddTaskReminderRequest,  db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+    ensure_token_user_match(user_data["sub"], payload.user_id)
+
+    user = db.query(User).filter(User.id == payload.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     new_reminder = TaskReminder(
         user_id=user.id,
-        title=reminder_data.title,
-        due_time=reminder_data.due_time,
-        is_recurring=(reminder_data.recurrence_type != "once"),
-        recurrence_type=reminder_data.recurrence_type
+        title=payload.title,
+        due_time=payload.due_time,
+        is_recurring=(payload.recurrence_type != "once"),
+        recurrence_type=payload.recurrence_type
     )
     db.add(new_reminder)
     db.commit()
@@ -178,16 +183,25 @@ def add_reminder(reminder_data: TaskReminderCreate, db: Session = Depends(get_db
         "recurrence_type": new_reminder.recurrence_type
     }}
 
-@router.get("/get-task-reminder")
-def get_reminders(user_id: int, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
-    if str(user_data["sub"]) != str(user_id):
-        raise HTTPException(status_code=401, detail="Token/user mismatch")
 
-    user = db.query(User).filter(User.id == user_id).first()
+class ListTaskReminderRequest(BaseModel):
+    user_id: int
+
+@limiter.limit(get_tier_limit)
+@router.post("/list-task-reminders")
+def list_task_reminders(payload: ListTaskReminderRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+    ensure_token_user_match(user_data["sub"], payload.user_id)
+
+    user = db.query(User).filter(User.id == payload.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    reminders = db.query(TaskReminder).filter(TaskReminder.user_id == user.id).order_by(TaskReminder.due_time).all()
+    reminders = (
+        db.query(TaskReminder)
+        .filter(TaskReminder.user_id == user.id)
+        .order_by(TaskReminder.due_time)
+        .all()
+    )
 
     return {
         "reminders": [
@@ -199,40 +213,61 @@ def get_reminders(user_id: int, db: Session = Depends(get_db), user_data: dict =
             } for r in reminders
         ]
     }
-@router.delete("/delete-task-reminder/{task_reminder_id}")
-def delete_reminder(task_reminder_id: int, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
-    reminder = db.query(TaskReminder).filter(TaskReminder.id == task_reminder_id).first()
+
+
+class ModifyTaskReminderRequest(BaseModel):
+    id: int
+    user_id: int
+    title: str
+    due_time: datetime
+    recurrence_type: str = "once"
+
+@limiter.limit(get_tier_limit)
+@router.put("/modify-task-reminder")
+def modify_task_reminder(payload: ModifyTaskReminderRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+    ensure_token_user_match(user_data["sub"], payload.user_id)
+
+    reminder = db.query(TaskReminder).filter(TaskReminder.id == payload.id).first()
     if not reminder:
         raise HTTPException(status_code=404, detail="Task Reminder not found")
 
     # ✅ Check if reminder belongs to user from token
-    if reminder.user_id != int(user_data["sub"]):
-        raise HTTPException(status_code=403, detail="Not authorized to delete this reminder")
+    if reminder.user_id != payload.user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to modify this reminder")
 
-    db.delete(reminder)
-    db.commit()
-    return {"message": "Task Reminder deleted"}
-
-
-@router.put("/update-task-reminder")
-def update_reminder(reminder_data: TaskReminderUpdate, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
-    reminder = db.query(TaskReminder).filter(TaskReminder.id == reminder_data.id).first()
-    if not reminder:
-        raise HTTPException(status_code=404, detail="Task Reminder not found")
-
-    # ✅ Check if reminder belongs to user from token
-    if reminder.user_id != int(user_data["sub"]):
-        raise HTTPException(status_code=403, detail="Not authorized to update this reminder")
-
-    reminder.title = reminder_data.title
-    reminder.due_time = reminder_data.datetime
-    reminder.is_recurring = reminder_data.repeat != "once"
-    reminder.recurrence_type = None if reminder_data.repeat == "once" else reminder_data.repeat
+    reminder.title = payload.title
+    reminder.due_time = payload.due_time
+    reminder.is_recurring = payload.recurrence_type != "once"
+    reminder.recurrence_type = None if payload.recurrence_type == "once" else payload.recurrence_type
 
     db.commit()
-    return {"message": "Task Reminder updated", "task-reminder": {
+
+    return {"message": "Task Reminder modified", "task-reminder": {
         "id": reminder.id,
         "title": reminder.title,
         "datetime": reminder.due_time,
         "repeat": reminder.recurrence_type or "once"
     }}
+
+
+class DeleteTaskReminderRequest(BaseModel):
+    user_id: int
+    task_reminder_id: int
+
+@limiter.limit(get_tier_limit)
+@router.delete("/delete-task-reminder")
+def delete_reminder(payload: DeleteTaskReminderRequest,  db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+    ensure_token_user_match(user_data["sub"], payload.user_id)
+
+    reminder = db.query(TaskReminder).filter(TaskReminder.id == payload.task_reminder_id).first()
+    if not reminder:
+        raise HTTPException(status_code=404, detail="Task Reminder not found")
+
+    # ✅ Check if reminder belongs to user from token
+    if reminder.user_id != payload.user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this reminder")
+
+    db.delete(reminder)
+    db.commit()
+
+    return {"message": "Task Reminder deleted"}

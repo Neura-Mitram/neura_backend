@@ -1,12 +1,18 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Form
+from fastapi import APIRouter, Depends, UploadFile, File
 from sqlalchemy.orm import Session
 from app.models.database import SessionLocal
 from app.models.daily_checkin_model import DailyCheckin
 from app.utils.audio_processor import transcribe_audio
 from app.utils.ai_engine import generate_ai_reply
-from app.utils.jwt_utils import verify_access_token
-from fastapi import Header, HTTPException
+from app.utils.auth_utils import ensure_token_user_match, require_token
 import datetime
+from pydantic import BaseModel
+from typing import Optional
+import uuid
+
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from app.utils.rate_limit_utils import get_tier_limit
 
 router = APIRouter()
 
@@ -18,27 +24,27 @@ def get_db():
     finally:
         db.close()
 
-def require_token(authorization: str = Header(...)):
-    token = authorization.replace("Bearer ", "")
-    return verify_access_token(token)
+class CheckinRequest(BaseModel):
+    user_id: int
+    mood_rating: int
+    gratitude: str
+    thoughts: str
 
+@limiter.limit(get_tier_limit)
 @router.post("/neura/daily-checkin")
 async def daily_checkin(
-    user_id: int = Form(...),
-    mood_rating: int = Form(...),
-    gratitude: str = Form(...),
-    thoughts: str = Form(...),
+    payload: CheckinRequest,
     voice_note: UploadFile = File(None),
     db: Session = Depends(get_db),
     user_data: dict = Depends(require_token)
 ):
     # ✅ Verify user_id matches token
-    if str(user_data["sub"]) != str(user_id):
-        raise HTTPException(status_code=401, detail="Token/user mismatch")
+    ensure_token_user_match(user_data["sub"], payload.user_id)
 
     voice_summary = None
     if voice_note:
-        temp_path = f"/data/temp_audio/{voice_note.filename}"
+        filename = f"{uuid.uuid4()}.mp3"
+        temp_path = f"/data/temp_audio/{filename}"
         with open(temp_path, "wb") as f:
             f.write(await voice_note.read())
 
@@ -47,25 +53,35 @@ async def daily_checkin(
         voice_summary = generate_ai_reply(prompt)
 
     checkin = DailyCheckin(
-        user_id=user_id,
+        user_id=payload.user_id,
         date=datetime.date.today().isoformat(),
-        mood_rating=mood_rating,
-        gratitude=gratitude,
-        thoughts=thoughts,
+        mood_rating=payload.mood_rating,
+        gratitude=payload.gratitude,
+        thoughts=payload.thoughts,
         voice_summary=voice_summary
     )
     db.add(checkin)
     db.commit()
     db.refresh(checkin)
+
     return {"message": "Check-in recorded", "checkin": checkin.id}
 
+class ReflectionRequest(BaseModel):
+    user_id: int
 
-@router.get("/neura/daily-reflection/{user_id}")
-def get_checkins(user_id: int, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+@limiter.limit(get_tier_limit)
+@router.post("/neura/get-daily-checkin")
+def get_checkins(payload: ReflectionRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+
     # ✅ Verify user_id matches token
-    if str(user_data["sub"]) != str(user_id):
-        raise HTTPException(status_code=401, detail="Token/user mismatch")
+    ensure_token_user_match(user_data["sub"], payload.user_id)
 
-    records = db.query(DailyCheckin).filter_by(user_id=user_id).all()
+    records = (
+        db.query(DailyCheckin)
+        .filter_by(user_id=payload.user_id)
+        .order_by(DailyCheckin.date.desc())
+        .all()
+    )
+
     return records
 

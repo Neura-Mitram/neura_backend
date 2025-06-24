@@ -1,5 +1,4 @@
 from fastapi import FastAPI
-from app.routers import neura_web_search_router, neura_checkin_router
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -8,10 +7,12 @@ from apscheduler.triggers.interval import IntervalTrigger
 import os
 
 from app.models.database import engine
-from app.models import user_model, message_model, task_reminder_model
-from app.routers import core_router, neura_creator_pro_router, anonymous_router
+from app.models import database  # for engine
+from app.models import *  # registers all models
+from app.routers import core_router, neura_creator_pro_router, anonymous_router, neura_web_search_router, neura_checkin_router
 from app.routers.voice_router import router as voice_router
-from app.utils.audio_cleanup import delete_old_audio_files
+from app.utils.checkin_audio_cleanup import delete_old_audio_files
+from app.utils.voice_chat_audio_cleanup import cleanup_old_audio
 from app.utils.message_memory_cleaner import delete_old_unimportant_messages
 from app.utils.task_reminder_cleaner import delete_expired_task_reminders
 from app.utils.task_reminder_notifier import notify_due_reminders
@@ -19,10 +20,16 @@ from app.utils.daily_checkin_cleaner import clean_old_checkins
 
 from pytz import timezone  # ✅ use this for interval
 
-# Create DB tables
-user_model.Base.metadata.create_all(bind=engine)
-message_model.Base.metadata.create_all(bind=engine)
-task_reminder_model.Base.metadata.create_all(bind=engine)
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from fastapi.responses import JSONResponse
+
+
+
+# Create DB tables in one go
+database.Base.metadata.create_all(bind=database.engine)
 
 # Scheduler setup
 scheduler = BackgroundScheduler()
@@ -44,6 +51,9 @@ async def lifespan(app: FastAPI):
     # 🕛 Clean expired # runs daily at 3 AM in 90 Days
     scheduler.add_job(clean_old_checkins, 'cron', hour=3, timezone=timezone("Asia/Kolkata"))
 
+    # ✅ NEW - run daily at 2AM IST
+    scheduler.add_job(cleanup_old_audio, 'cron', hour=2, minute=0, timezone=timezone("Asia/Kolkata"))
+
     scheduler.start()
     yield
     scheduler.shutdown()
@@ -58,8 +68,14 @@ app = FastAPI(
     version="1.0"
 )
 
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
+
+
 # Ensure temp audio folder exists
 os.makedirs("/data/temp_audio", exist_ok=True)
+os.makedirs("/data/audio", exist_ok=True)
 
 # Serve audio files from /get-temp-audio/
 app.mount("/get-temp-audio", StaticFiles(directory="/data/temp_audio"), name="audio")
@@ -72,6 +88,19 @@ app.include_router(neura_checkin_router.router)
 app.include_router(neura_creator_pro_router.router)
 app.include_router(anonymous_router.router)
 
+# ---------------------- ADDING EXCEPTION HANDLER ----------------------
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_exceeded_handler(request, exc):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Too many requests. Please slow down."}
+    )
+
 @app.get("/")
 def read_root():
     return {"message": "Welcome to Neura AI backend Live"}
+
+@app.get("/health", tags=["Infra"])
+def health_check():
+    return {"status": "ok"}
+
