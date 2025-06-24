@@ -7,9 +7,7 @@ from app.models.user_model import TierLevel
 from app.utils.auth_utils import ensure_token_user_match, require_token
 from fastapi import APIRouter, Query, HTTPException, Header, Depends
 
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-from app.utils.rate_limit_utils import get_tier_limit
+from app.utils.rate_limit_utils import get_tier_limit, limiter
 
 router = APIRouter()
 

@@ -16,9 +16,7 @@ import uuid
 import mimetypes
 
 
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-from app.utils.rate_limit_utils import get_tier_limit
+from app.utils.rate_limit_utils import get_tier_limit, limiter
 
 router = APIRouter()
 ASSISTANT_NAME = "Neura"

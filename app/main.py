@@ -20,12 +20,10 @@ from app.utils.daily_checkin_cleaner import clean_old_checkins
 
 from pytz import timezone  # ✅ use this for interval
 
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from app.utils.rate_limit_utils import limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from fastapi.responses import JSONResponse
-
 
 
 # Create DB tables in one go
@@ -68,7 +66,6 @@ app = FastAPI(
     version="1.0"
 )
 
-limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 

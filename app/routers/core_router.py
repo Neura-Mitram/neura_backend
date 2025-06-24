@@ -13,9 +13,7 @@ from app.utils.tier_check import get_monthly_limit
 from app.utils.ai_engine import generate_ai_reply
 from datetime import datetime
 
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-from app.utils.rate_limit_utils import get_tier_limit
+from app.utils.rate_limit_utils import get_tier_limit, limiter
 
 
 router = APIRouter()
