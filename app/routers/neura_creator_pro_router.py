@@ -18,7 +18,7 @@ class CaptionRequest(BaseModel):
 @router.post("/neura/generate-caption")
 @limiter.limit(get_tier_limit)
 def generate_caption(
-    payload: CaptionRequest, user_data: dict = Depends(require_token)
+    _request: Request, payload: CaptionRequest, user_data: dict = Depends(require_token)
 ):
     ensure_token_user_match(user_data["sub"], payload.user_id)
 
@@ -48,7 +48,7 @@ class YouTubeScriptRequest(BaseModel):
 @router.post("/neura/youtube-script")
 @limiter.limit(get_tier_limit)
 def generate_youtube_script_v2(
-    payload: YouTubeScriptRequest, user_data: dict = Depends(require_token)
+    _request: Request, payload: YouTubeScriptRequest, user_data: dict = Depends(require_token)
 ):
     ensure_token_user_match(user_data["sub"], payload.user_id)
 
@@ -101,7 +101,7 @@ class DraftRequest(BaseModel):
 @router.post("/neura/generate-blog")
 @limiter.limit(get_tier_limit)
 def generate_long_form_blog(
-    payload: DraftRequest, user_data: dict = Depends(require_token)
+    _request: Request, payload: DraftRequest, user_data: dict = Depends(require_token)
 ):
     ensure_token_user_match(user_data["sub"], payload.user_id)
 
@@ -141,7 +141,7 @@ class SEORequest(BaseModel):
 @router.post("/neura/seo-suggestions")
 @limiter.limit(get_tier_limit)
 def seo_suggestions(
-    payload: SEORequest, user_data: dict = Depends(require_token)
+    _request: Request, payload: SEORequest, user_data: dict = Depends(require_token)
 ):
     ensure_token_user_match(user_data["sub"], payload.user_id)
 
@@ -181,7 +181,7 @@ class EmailRequest(BaseModel):
 @router.post("/neura/email-helper")
 @limiter.limit(get_tier_limit)
 def generate_email_helper(
-    payload: EmailRequest, user_data: dict = Depends(require_token)
+    _request: Request, payload: EmailRequest, user_data: dict = Depends(require_token)
 ):
     ensure_token_user_match(user_data["sub"], payload.user_id)
 
@@ -219,7 +219,7 @@ class TimePlannerRequest(BaseModel):
 @router.post("/neura/time-planner")
 @limiter.limit(get_tier_limit)
 def time_block_planner(
-    payload: TimePlannerRequest, user_data: dict = Depends(require_token)
+    _request: Request, payload: TimePlannerRequest, user_data: dict = Depends(require_token)
 ):
     ensure_token_user_match(user_data["sub"], payload.user_id)
 
