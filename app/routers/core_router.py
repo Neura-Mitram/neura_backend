@@ -34,7 +34,7 @@ class ChatRequest(BaseModel):
     message: str
 @router.post("/chat-with-neura")
 @limiter.limit(get_tier_limit)
-def chat_with_neura(_request: Request, payload: ChatRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+def chat_with_neura(request: Request, payload: ChatRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
 
     # 🔐 Ensure token-user match
     ensure_token_user_match(user_data["sub"], payload.user_id)
@@ -121,7 +121,7 @@ class MemoryLogRequest(BaseModel):
     limit: int = 10
 @router.post("/memory-log")
 @limiter.limit(get_tier_limit)
-def get_memory_log(_request: Request, payload: MemoryLogRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+def get_memory_log(request: Request, payload: MemoryLogRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
     ensure_token_user_match(user_data["sub"], payload.user_id)
 
     user = db.query(User).filter(User.id == payload.user_id).first()
@@ -153,7 +153,7 @@ class AddTaskReminderRequest(BaseModel):
     recurrence_type: str = "once"
 @router.post("/add-task-reminder")
 @limiter.limit(get_tier_limit)
-def add_reminder(_request: Request, payload: AddTaskReminderRequest,  db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+def add_reminder(request: Request, payload: AddTaskReminderRequest,  db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
     ensure_token_user_match(user_data["sub"], payload.user_id)
 
     user = db.query(User).filter(User.id == payload.user_id).first()
@@ -183,7 +183,7 @@ class ListTaskReminderRequest(BaseModel):
     user_id: int
 @router.post("/list-task-reminders")
 @limiter.limit(get_tier_limit)
-def list_task_reminders(_request: Request, payload: ListTaskReminderRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+def list_task_reminders(request: Request, payload: ListTaskReminderRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
     ensure_token_user_match(user_data["sub"], payload.user_id)
 
     user = db.query(User).filter(User.id == payload.user_id).first()
@@ -217,7 +217,7 @@ class ModifyTaskReminderRequest(BaseModel):
     recurrence_type: str = "once"
 @router.put("/modify-task-reminder")
 @limiter.limit(get_tier_limit)
-def modify_task_reminder(_request: Request, payload: ModifyTaskReminderRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+def modify_task_reminder(request: Request, payload: ModifyTaskReminderRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
     ensure_token_user_match(user_data["sub"], payload.user_id)
 
     reminder = db.query(TaskReminder).filter(TaskReminder.id == payload.id).first()
@@ -248,7 +248,7 @@ class DeleteTaskReminderRequest(BaseModel):
     task_reminder_id: int
 @router.delete("/delete-task-reminder")
 @limiter.limit(get_tier_limit)
-def delete_reminder(_request: Request, payload: DeleteTaskReminderRequest,  db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+def delete_reminder(request: Request, payload: DeleteTaskReminderRequest,  db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
     ensure_token_user_match(user_data["sub"], payload.user_id)
 
     reminder = db.query(TaskReminder).filter(TaskReminder.id == payload.task_reminder_id).first()

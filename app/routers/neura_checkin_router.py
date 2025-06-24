@@ -30,7 +30,7 @@ class CheckinRequest(BaseModel):
 @router.post("/neura/daily-checkin")
 @limiter.limit(get_tier_limit)
 async def daily_checkin(
-    _request: Request,
+    request: Request,
     payload: CheckinRequest,
     voice_note: UploadFile = File(None),
     db: Session = Depends(get_db),
@@ -68,7 +68,7 @@ class ReflectionRequest(BaseModel):
     user_id: int
 @router.post("/neura/get-daily-checkin")
 @limiter.limit(get_tier_limit)
-def get_checkins(_request: Request, payload: ReflectionRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+def get_checkins(request: Request, payload: ReflectionRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
 
     # ✅ Verify user_id matches token
     ensure_token_user_match(user_data["sub"], payload.user_id)

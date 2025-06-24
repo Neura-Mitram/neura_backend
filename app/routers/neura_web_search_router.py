@@ -32,7 +32,7 @@ class WebSearchResponse(BaseModel):
 @router.post("/neura/wiki-search", response_model=WebSearchResponse)
 @limiter.limit(get_tier_limit)
 def web_search(
-        _request: Request,
+        request: Request,
         payload: WebSearchRequest,
         user_data: dict = Depends(require_token)
 ):
