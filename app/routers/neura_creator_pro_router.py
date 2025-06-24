@@ -5,7 +5,7 @@ from app.utils.tier_check import ensure_minimum_tier
 from pydantic import BaseModel
 from app.models.user_model import TierLevel
 from app.utils.auth_utils import ensure_token_user_match, require_token
-from fastapi import APIRouter, Query, HTTPException, Header, Depends
+from fastapi import APIRouter, Query, HTTPException, Header, Depends, Request
 
 from app.utils.rate_limit_utils import get_tier_limit, limiter
 
@@ -15,9 +15,8 @@ class CaptionRequest(BaseModel):
     user_id: int
     topic: str
     tone: str = "engaging"
-
-@limiter.limit(get_tier_limit)
 @router.post("/neura/generate-caption")
+@limiter.limit(get_tier_limit)
 def generate_caption(
     payload: CaptionRequest, user_data: dict = Depends(require_token)
 ):
@@ -46,9 +45,8 @@ class YouTubeScriptRequest(BaseModel):
     tone: str = "inspiring"
     duration: str = "medium"
     audience: str = "general"
-
-@limiter.limit(get_tier_limit)
 @router.post("/neura/youtube-script")
+@limiter.limit(get_tier_limit)
 def generate_youtube_script_v2(
     payload: YouTubeScriptRequest, user_data: dict = Depends(require_token)
 ):
@@ -100,9 +98,8 @@ class DraftRequest(BaseModel):
     topic: str
     audience: str = "general"
     tone: str = "thoughtful"
-
-@limiter.limit(get_tier_limit)
 @router.post("/neura/generate-blog")
+@limiter.limit(get_tier_limit)
 def generate_long_form_blog(
     payload: DraftRequest, user_data: dict = Depends(require_token)
 ):
@@ -141,9 +138,8 @@ class SEORequest(BaseModel):
     user_id: int
     platform: str = "blog"
     content: str
-
-@limiter.limit(get_tier_limit)
 @router.post("/neura/seo-suggestions")
+@limiter.limit(get_tier_limit)
 def seo_suggestions(
     payload: SEORequest, user_data: dict = Depends(require_token)
 ):
@@ -182,9 +178,8 @@ class EmailRequest(BaseModel):
     context: str
     tone: str = "professional"
     goal: str = "clarify, close a deal, get a reply"
-
-@limiter.limit(get_tier_limit)
 @router.post("/neura/email-helper")
+@limiter.limit(get_tier_limit)
 def generate_email_helper(
     payload: EmailRequest, user_data: dict = Depends(require_token)
 ):
@@ -221,9 +216,8 @@ class TimePlannerRequest(BaseModel):
     tasks: List[str]
     total_hours: float = 8.0
     focus_mode: str = "balanced"
-
-@limiter.limit(get_tier_limit)
 @router.post("/neura/time-planner")
+@limiter.limit(get_tier_limit)
 def time_block_planner(
     payload: TimePlannerRequest, user_data: dict = Depends(require_token)
 ):

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query, HTTPException, Header, Depends
+from fastapi import APIRouter, Query, HTTPException, Header, Depends, Request
 from app.utils.web_search import search_wikipedia
 from app.utils.ai_engine import generate_ai_reply
 from app.utils.auth_utils import ensure_token_user_match, require_token
@@ -28,8 +28,9 @@ class WebSearchResponse(BaseModel):
     summary: str
     results: List[WebSearchResult]
 
-@limiter.limit(get_tier_limit)
+
 @router.post("/neura/wiki-search", response_model=WebSearchResponse)
+@limiter.limit(get_tier_limit)
 def web_search(
         payload: WebSearchRequest,
         user_data: dict = Depends(require_token)

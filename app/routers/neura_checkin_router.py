@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File
+from fastapi import APIRouter, Depends, UploadFile, File, Request
 from sqlalchemy.orm import Session
 from app.models.database import SessionLocal
 from app.models.daily_checkin_model import DailyCheckin
@@ -27,9 +27,8 @@ class CheckinRequest(BaseModel):
     mood_rating: int
     gratitude: str
     thoughts: str
-
-@limiter.limit(get_tier_limit)
 @router.post("/neura/daily-checkin")
+@limiter.limit(get_tier_limit)
 async def daily_checkin(
     payload: CheckinRequest,
     voice_note: UploadFile = File(None),
@@ -66,9 +65,8 @@ async def daily_checkin(
 
 class ReflectionRequest(BaseModel):
     user_id: int
-
-@limiter.limit(get_tier_limit)
 @router.post("/neura/get-daily-checkin")
+@limiter.limit(get_tier_limit)
 def get_checkins(payload: ReflectionRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
 
     # ✅ Verify user_id matches token

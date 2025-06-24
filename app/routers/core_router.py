@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Header
+from fastapi import APIRouter, Depends, HTTPException, Query, Header, Request
 from sqlalchemy.orm import Session
 from app.models.database import SessionLocal
 
@@ -32,9 +32,8 @@ def get_db():
 class ChatRequest(BaseModel):
     user_id: int
     message: str
-
-@limiter.limit(get_tier_limit)
 @router.post("/chat-with-neura")
+@limiter.limit(get_tier_limit)
 def chat_with_neura(payload: ChatRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
 
     # 🔐 Ensure token-user match
@@ -120,9 +119,8 @@ def chat_with_neura(payload: ChatRequest, db: Session = Depends(get_db), user_da
 class MemoryLogRequest(BaseModel):
     user_id: int
     limit: int = 10
-
-@limiter.limit(get_tier_limit)
 @router.post("/memory-log")
+@limiter.limit(get_tier_limit)
 def get_memory_log(payload: MemoryLogRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
     ensure_token_user_match(user_data["sub"], payload.user_id)
 
@@ -153,9 +151,8 @@ class AddTaskReminderRequest(BaseModel):
     title: str
     due_time: datetime
     recurrence_type: str = "once"
-
-@limiter.limit(get_tier_limit)
 @router.post("/add-task-reminder")
+@limiter.limit(get_tier_limit)
 def add_reminder(payload: AddTaskReminderRequest,  db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
     ensure_token_user_match(user_data["sub"], payload.user_id)
 
@@ -184,9 +181,8 @@ def add_reminder(payload: AddTaskReminderRequest,  db: Session = Depends(get_db)
 
 class ListTaskReminderRequest(BaseModel):
     user_id: int
-
-@limiter.limit(get_tier_limit)
 @router.post("/list-task-reminders")
+@limiter.limit(get_tier_limit)
 def list_task_reminders(payload: ListTaskReminderRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
     ensure_token_user_match(user_data["sub"], payload.user_id)
 
@@ -219,9 +215,8 @@ class ModifyTaskReminderRequest(BaseModel):
     title: str
     due_time: datetime
     recurrence_type: str = "once"
-
-@limiter.limit(get_tier_limit)
 @router.put("/modify-task-reminder")
+@limiter.limit(get_tier_limit)
 def modify_task_reminder(payload: ModifyTaskReminderRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
     ensure_token_user_match(user_data["sub"], payload.user_id)
 
@@ -251,9 +246,8 @@ def modify_task_reminder(payload: ModifyTaskReminderRequest, db: Session = Depen
 class DeleteTaskReminderRequest(BaseModel):
     user_id: int
     task_reminder_id: int
-
-@limiter.limit(get_tier_limit)
 @router.delete("/delete-task-reminder")
+@limiter.limit(get_tier_limit)
 def delete_reminder(payload: DeleteTaskReminderRequest,  db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
     ensure_token_user_match(user_data["sub"], payload.user_id)
 

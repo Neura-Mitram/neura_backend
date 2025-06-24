@@ -31,8 +31,9 @@ def get_db():
 
 
 # ---------------------- VOICE CHAT ENDPOINT ----------------------
-@limiter.limit(get_tier_limit)
+
 @router.post("/voice-chat-with-neura")
+@limiter.limit(get_tier_limit)
 async def voice_chat_with_neura(
     user_id: int = Form(...),
     file: UploadFile = File(...),
@@ -145,9 +146,8 @@ async def voice_chat_with_neura(
 class GetAudioRequest(BaseModel):
     user_id: int
     filename: str
-
-@limiter.limit(get_tier_limit)
 @router.post("/get-voice-chat-audio")
+@limiter.limit(get_tier_limit)
 async def get_voice_chat_audio(
     payload: GetAudioRequest,
     request: Request,
