@@ -1,7 +1,7 @@
 from fastapi import Request, HTTPException, Depends
 from app.utils.auth_utils import require_token
-from app.models.database import SessionLocal
-from app.models.user_model import User, TierLevel
+from app.database import SessionLocal
+from app.models.user import User, TierLevel
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address

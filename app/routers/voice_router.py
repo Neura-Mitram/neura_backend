@@ -1,22 +1,30 @@
-from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Depends, Request
+from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Depends, Request, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime
-from app.models.database import SessionLocal
-from app.models.user_model import User, TierLevel
+from app.database import SessionLocal
+from app.models.user import User, TierLevel
 from app.models.message_model import Message
-from app.models.generated_audio_model import GeneratedAudio
+from app.models.generated_audio import GeneratedAudio
 from app.utils.audio_processor import transcribe_audio, synthesize_voice
 from app.utils.ai_engine import generate_ai_reply
-from app.utils.auth_utils import require_token, ensure_token_user_match
-from app.utils.tier_check import get_monthly_limit
+from app.utils.auth_utils import require_token, ensure_token_user_match, build_chat_history
+from app.utils.tier_logic import get_monthly_limit
 import os
 import uuid
 import mimetypes
 
-
 from app.utils.rate_limit_utils import get_tier_limit, limiter
+from app.schemas.intent_schemas import IntentRequest
+from app.services.intent_router_core import detect_and_route_intent, IntentRequest
+
+from app.utils.red_flag_utils import detect_red_flag
+from app.utils.prompt_templates import red_flag_response, creator_info_response
+
+from app.services.emotion_tone_updater import update_emotion_status
+
+
 
 router = APIRouter()
 ASSISTANT_NAME = "Neura"
@@ -37,117 +45,198 @@ def get_db():
 async def voice_chat_with_neura(
     request: Request,
     user_id: int = Form(...),
+    conversation_id: int = Form(None),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     user_data: dict = Depends(require_token)
 ):
+    """
+    Accepts voice input, transcribes it, detects intent,
+    and either respo-nds via fallback chat+TTS or routes to int-ent handler.
+    """
+
+    # ✅ Authentication
     ensure_token_user_match(user_data["sub"], user_id)
 
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # ✅ Validate MIME type file
     if file.content_type not in ["audio/wav", "audio/x-wav", "audio/mp3"]:
         raise HTTPException(status_code=400, detail="Invalid audio format. Use WAV or MP3.")
 
-    now = datetime.utcnow()
-    if user.last_gpt_reset.month != now.month or user.last_gpt_reset.year != now.year:
-        user.monthly_voice_count = 0
-        user.last_voice_reset = now
-
+    # ✅ Tier limit logic
     monthly_limit = get_monthly_limit(user.tier)
-
     if user.tier == TierLevel.free:
         total_usage = user.monthly_gpt_count + user.monthly_voice_count
         if total_usage >= monthly_limit:
-            db.commit()
             return {
-                "reply": f"⚠️ You've used your {monthly_limit} total messages this month. Upgrade your plan to get more access.",
+                "reply": f"⚠️ You've used your {monthly_limit} total messages this month. Upgrade your plan.",
                 "memory_enabled": user.memory_enabled,
-                "important": False,
                 "messages_used_this_month": total_usage,
                 "messages_remaining": 0,
                 "audio_url": None
             }
     else:
         if user.monthly_voice_count >= monthly_limit:
-            db.commit()
             return {
-                "reply": f"⚠️ You've used your {monthly_limit} voice messages for {user.tier} this month. Upgrade your plan to get more access.",
+                "reply": f"⚠️ You've used your {monthly_limit} voice messages for {user.tier} this month.",
                 "memory_enabled": user.memory_enabled,
-                "important": False,
                 "messages_used_this_month": user.monthly_voice_count,
                 "messages_remaining": 0,
                 "audio_url": None
             }
 
+    # ✅ Save file temporarily
     filename = f"temp_{uuid.uuid4()}.wav"
-    filepath = os.path.join("/data/audio", filename)
+    filepath = os.path.join("/data/audio/temp_audio", filename)
     with open(filepath, "wb") as f:
         f.write(await file.read())
 
+    # ✅ Transcribe
     try:
-        transcript = transcribe_audio(filepath)
-        os.remove(filepath)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+       transcript = transcribe_audio(filepath)
+    finally:
+       if os.path.exists(filepath):
+          os.remove(filepath)
 
-    important_keywords = ["remember", "goal", "habit", "remind", "dream", "mission"]
-    is_important = any(word in transcript.lower() for word in important_keywords)
+    # ✅ Update emotion
+    emotion_label = await update_emotion_status(user, transcript, db)
 
-    if user.memory_enabled:
-        past_msgs = db.query(Message).filter(Message.user_id == user.id).order_by(Message.timestamp.desc()).limit(10).all()
-        past_msgs.reverse()
-        chat_history = "".join([
-            f"{'User' if msg.sender == 'user' else ASSISTANT_NAME}: {msg.message}\n"
-            for msg in past_msgs
-        ])
-        full_prompt = f"{chat_history}User: {transcript}\n{ASSISTANT_NAME}:"
-    else:
-        full_prompt = transcript
+    # 🚩 Red flag detection
+    red_flag = detect_red_flag(transcript)
+    if red_flag == "code":
+        return {
+            "reply": red_flag_response("code or internal details"),
+            "memory_enabled": user.memory_enabled,
+            "messages_used_this_month": user.monthly_voice_count,
+            "messages_remaining": monthly_limit - user.monthly_voice_count,
+            "audio_url": None
+        }
+    if red_flag == "creator":
+        return {
+            "reply": creator_info_response(),
+            "memory_enabled": user.memory_enabled,
+            "messages_used_this_month": user.monthly_voice_count,
+            "messages_remaining": monthly_limit - user.monthly_voice_count,
+            "audio_url": None
+        }
 
-    try:
+    # ✅ Detect intent
+    intent_prompt = f"""
+    You are an assistant that classifies user intent.
+    Return ONLY one word from this list:
+    [
+        journal, journal_list, journal_delete, journal_modify,
+        checkin, checkin_list, checkin_delete, checkin_modify,
+        habit, habit_list, habit_modify, habit_delete,
+        goal, goal_list, goal_modify, goal_delete,
+        search, notification, smart_reply,
+        creator_mode, creator_caption, creator_content_ideas,
+        creator_weekly_plan, creator_audience_helper, creator_viral_reels,
+        creator_seo, creator_email, creator_time_planner,
+        creator_youtube_script, creator_blog,
+        fallback
+    ]
+
+    User input: {transcript}
+
+    Intent:
+    """
+    intent_raw = generate_ai_reply(intent_prompt)
+    intent = intent_raw.strip().lower()
+
+    # ✅ If fallback, do chat
+    if intent == "fallback":
+        # Important tagging
+        important_keywords = ["remember", "goal", "habit", "remind", "dream", "mission"]
+        is_important = any(word in transcript.lower() for word in important_keywords)
+
+        # Build chat history
+        if user.memory_enabled:
+            chat_history = build_chat_history(db, user.id, conversation_id=conversation_id or 1)
+            full_prompt = f"{chat_history}\nUser: {transcript}\n{ASSISTANT_NAME}:"
+        else:
+            full_prompt = transcript
+
+        # Generate reply
         assistant_reply = generate_ai_reply(full_prompt)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI generation failed: {str(e)}")
 
-    voice_gender = user.voice or "male"
+        # Synthesize voice
+        voice_gender = user.voice if user.voice in ["male", "female"] else "male"
 
-    try:
-        audio_output_path = synthesize_voice(assistant_reply, gender=voice_gender)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Voice synthesis failed: {str(e)}")
+        # Audio output folders
+        output_folder = "/data/audio/voice_chat"
 
-    if user.memory_enabled:
-        db.add_all([
-            Message(user_id=user.id, sender="user", message=transcript, important=is_important),
-            Message(user_id=user.id, sender="assistant", message=assistant_reply, important=False),
-        ])
+        audio_output_path = synthesize_voice(assistant_reply, gender=voice_gender, output_folder=output_folder)
 
-    generated_audio = GeneratedAudio(
-        user_id=user.id,
-        filename=os.path.basename(audio_output_path),
-    )
-    db.add(generated_audio)
+        # Save messages
+        if user.memory_enabled:
+            db.add_all([
+                Message(
+                    user_id=user.id,
+                    conversation_id=conversation_id or 1,
+                    sender="user",
+                    message=transcript,
+                    important=is_important
+                ),
+                Message(
+                    user_id=user.id,
+                    conversation_id=conversation_id or 1,
+                    sender="assistant",
+                    message=assistant_reply,
+                    important=False
+                ),
+            ])
 
-    user.monthly_voice_count += 1
-    db.commit()
+        # Save audio record
+        generated_audio = GeneratedAudio(
+            user_id=user.id,
+            filename= os.path.join("voice_chat", os.path.basename(audio_output_path))
+        )
+        db.add(generated_audio)
 
-    return {
-        "reply": assistant_reply,
-        "memory_enabled": user.memory_enabled,
-        "important": is_important,
-        "messages_used_this_month": user.monthly_voice_count,
-        "messages_remaining": monthly_limit - user.monthly_voice_count,
-        "audio_url": f"/get-audio/{os.path.basename(audio_output_path)}"
-    }
+        # Increment usage
+        user.monthly_voice_count += 1
+        db.commit()
+
+        return {
+            "reply": assistant_reply,
+            "emotion": emotion_label,
+            "memory_enabled": user.memory_enabled,
+            "messages_used_this_month": user.monthly_voice_count,
+            "messages_remaining": monthly_limit - user.monthly_voice_count,
+            "audio_url": f"/get-voice-chat-audio?user_id={user.id}&filename={os.path.join('voice_chat', os.path.basename(audio_output_path))}"
+
+        }
+
+    # ✅ If intent is something else, call intent router
+    else:
+        # Emulate IntentRequest
+        intent_payload = IntentRequest(
+            user_id=user.id,
+            message=transcript,
+            conversation_id=conversation_id or 1
+        )
+        intent_result = await detect_and_route_intent(
+            request=request,
+            payload=intent_payload,
+            db=db,
+            user_data=user_data
+        )
+
+        return {
+            **intent_result,
+            "emotion": emotion_label
+        }
 
 
 # ---------------------- AUDIO STREAMING ENDPOINT ----------------------
 class GetAudioRequest(BaseModel):
     user_id: int
     filename: str
-@router.post("/get-voice-chat-audio")
+@router.get("/get-voice-chat-audio")
 @limiter.limit(get_tier_limit)
 async def get_voice_chat_audio(
     payload: GetAudioRequest,
@@ -155,7 +244,15 @@ async def get_voice_chat_audio(
     db: Session = Depends(get_db),
     user_data: dict = Depends(require_token)
 ):
+    """
+        Streams audio file back to client, supporting Range requests.
+    """
+
     ensure_token_user_match(user_data["sub"], payload.user_id)
+
+    # Validate file extension
+    if not payload.filename.lower().endswith((".mp3", ".wav")):
+        raise HTTPException(status_code=400, detail="Invalid file type.")
 
     audio_record = (
         db.query(GeneratedAudio)
@@ -192,4 +289,13 @@ async def get_voice_chat_audio(
                 "Content-Length": str(length),
             },
         )
-    return FileResponse(file_path, media_type=content_type)
+
+    # Return file with extension
+    return FileResponse(
+        file_path,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{os.path.basename(payload.filename)}"'
+        }
+    )
+

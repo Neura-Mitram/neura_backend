@@ -1,16 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
-from datetime import datetime
-import uuid
-
-from app.models.database import SessionLocal
-from app.models.user_model import User, TierLevel
+from app.database import SessionLocal
+from app.models.user import User, TierLevel
 from app.utils.auth_utils import ensure_token_user_match, require_token
 
-from pydantic import BaseModel
-
-from app.utils.trial_utils import check_trial_expiry
+# from app.utils.trial_utils import check_trial_expiry
 from app.utils.jwt_utils import create_access_token  # ✅ JWT added
+from pydantic import BaseModel
 
 
 router = APIRouter(prefix="/auth", tags=["Anonymous Auth"])
@@ -32,13 +28,6 @@ def anonymous_login(payload: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.temp_uid == device_id).first()
 
     if user:
-        trial_info = check_trial_expiry(user.trial_start) if user.trial_start else {
-            "trial_expired": False, "days_used": 0, "days_left": 7
-        }
-
-        if trial_info["trial_expired"] and user.tier == TierLevel.free:
-            raise HTTPException(status_code=403, detail="🚫 Trial expired. Please upgrade to continue.")
-
         token = create_access_token({"sub": user.temp_uid})
         return {
             "message": "🔁 Returning user",
@@ -48,15 +37,11 @@ def anonymous_login(payload: LoginRequest, db: Session = Depends(get_db)):
                 "ai_name": user.ai_name,
                 "voice": user.voice,
                 "tier": user.tier.value,
-                "trial_expired": trial_info["trial_expired"],
-                "days_used": trial_info["days_used"],
-                "days_left": trial_info["days_left"]
             }
         }
 
     new_user = User(
         temp_uid=device_id,
-        trial_start=datetime.utcnow(),
         is_verified=True
     )
     db.add(new_user)
@@ -72,9 +57,6 @@ def anonymous_login(payload: LoginRequest, db: Session = Depends(get_db)):
             "ai_name": new_user.ai_name,
             "voice": new_user.voice,
             "tier": new_user.tier.value,
-            "trial_expired": False,
-            "days_used": 0,
-            "days_left": 7
         }
     }
 
@@ -113,10 +95,6 @@ def get_profile(payload: ProfileRequest, db: Session = Depends(get_db), user_dat
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
 
-    trial_info = check_trial_expiry(user.trial_start) if user.trial_start else {
-        "trial_expired": False, "days_used": 0, "days_left": 7
-    }
-
     is_upgraded = user.tier in [TierLevel.basic, TierLevel.pro]
 
     return {
@@ -124,9 +102,6 @@ def get_profile(payload: ProfileRequest, db: Session = Depends(get_db), user_dat
         "ai_name": user.ai_name,
         "voice": user.voice,
         "tier": user.tier.value,
-        "trial_expired": trial_info["trial_expired"],
-        "days_used": trial_info["days_used"],
-        "days_left": trial_info["days_left"],
         "is_upgraded": is_upgraded
     }
 

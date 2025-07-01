@@ -1,7 +1,11 @@
 # app/models/__init__.py
 
-from .user_model import User
+from .user import User
 from .message_model import Message
-from .task_reminder_model import TaskReminder
-from .daily_checkin_model import DailyCheckin
-from .generated_audio_model import GeneratedAudio
+from .daily_checkin import DailyCheckin
+from .generated_audio import GeneratedAudio
+from .goal import Goal
+from .habit import Habit
+from .interaction_log import InteractionLog
+from .journal import JournalEntry
+from .notification import NotificationLog

@@ -1,4 +1,4 @@
-from app.utils.mistral_engine import get_mistral_reply
+from app.services.mistral_ai_service import get_mistral_reply
 
 def generate_ai_reply(prompt: str):
     """

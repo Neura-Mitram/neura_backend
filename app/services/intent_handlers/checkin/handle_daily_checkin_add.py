@@ -1,0 +1,56 @@
+from sqlalchemy.orm import Session
+from app.models.user import User
+from app.models.daily_checkin import DailyCheckin
+from app.utils.auth_utils import ensure_token_user_match
+from app.services.emotion_tone_updater import update_emotion_status
+from app.services.mistral_ai_service import get_mistral_reply
+from fastapi import HTTPException, Request
+from datetime import datetime
+import json
+from app.utils.prompt_templates import checkin_add_prompt
+
+
+async def handle_checkin_add(request: Request, db: Session, user: User, intent_payload: dict):
+    try:
+        await ensure_token_user_match(request, user.id)
+
+        mood_rating = intent_payload.get("mood_rating")
+        gratitude = intent_payload.get("gratitude", "")
+        thoughts = intent_payload.get("thoughts", "")
+        voice_note = intent_payload.get("voice_note", "")
+
+        # 🔍 Step 1: Emotion Detection from thoughts
+        emotion_label = await update_emotion_status(user, thoughts, db)
+
+        # 🧠 Step 2: Generate AI insight based on tone and thoughts
+
+        prompt = checkin_add_prompt(message, emotion_label)
+
+        ai_response = get_mistral_reply(prompt)
+        insight = json.loads(ai_response).get("ai_insight", "")
+
+        # 📝 Step 3: Save check-in with emotion + optional voice + AI insight
+        new_checkin = DailyCheckin(
+            user_id=user.id,
+            mood_rating=mood_rating,
+            gratitude=gratitude,
+            thoughts=thoughts,
+            voice_summary=voice_note,
+            emotion_label=emotion_label,
+            ai_insight=insight,
+            date=datetime.utcnow().date()
+        )
+
+        db.add(new_checkin)
+        db.commit()
+        db.refresh(new_checkin)
+
+        return {
+            "status": "success",
+            "message": f"Check-in saved with emotion '{emotion_label}'",
+            "checkin_id": new_checkin.id,
+            "ai_insight": insight
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error in check-in: {str(e)}")
