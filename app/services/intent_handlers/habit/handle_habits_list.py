@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.models.user import User
 from app.models.habit import Habit
 from app.utils.auth_utils import ensure_token_user_match
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 async def handle_list_habits(request: Request, user: User, message: str, db: Session):
     # Ensure token-user match

@@ -8,6 +8,7 @@ from app.services.mistral_ai_service import get_mistral_reply
 from app.utils.auth_utils import ensure_token_user_match
 import json
 from app.utils.prompt_templates import journal_delete_prompt
+from fastapi import Request
 
 async def handle_journal_delete(request: Request, user: User, message: str, db: Session):
     # Ensure token-user match

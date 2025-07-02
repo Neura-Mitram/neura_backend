@@ -5,7 +5,7 @@ from app.models.user import User
 from app.models.habit import Habit
 from app.services.mistral_ai_service import get_mistral_reply
 from app.utils.auth_utils import ensure_token_user_match
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 import json
 from app.utils.prompt_templates import habit_delete_prompt
 
