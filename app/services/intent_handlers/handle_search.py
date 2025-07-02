@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from app.models.user import User, TierLevel
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from app.services.mistral_ai_service import get_mistral_reply
 from app.utils.auth_utils import ensure_token_user_match
 from app.services.search_service import search_wikipedia, search_duckduckgo, format_results_for_summary
