@@ -9,7 +9,7 @@ from app.utils.auth_utils import require_token, ensure_token_user_match
 from app.utils.voice_sender import send_voice_to_neura
 import logging
 import json
-from app.utils.emotion_tone_updater import trigger_voice_if_keyword_matched
+from app.utils.notification_voice_trigger import trigger_voice_if_keyword_matched
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
