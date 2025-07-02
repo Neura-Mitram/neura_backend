@@ -3,7 +3,7 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from app.database import Base
+from app.models.database import Base
 
 class Habit(Base):
     __tablename__ = "habit_entries"

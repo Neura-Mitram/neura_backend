@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from app.models.interaction_log import InteractionLog
 from app.models.user import User
-from app.database import SessionLocal
+from app.models.database import SessionLocal
 from app.utils.tier_logic import get_user_max_audio_retention_days
 
 def clean_old_interaction_logs():

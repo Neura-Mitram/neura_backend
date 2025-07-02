@@ -3,7 +3,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime
-from app.database import SessionLocal
+from app.models.database import SessionLocal
 from app.models.user import User, TierLevel
 from app.models.message_model import Message
 from app.models.generated_audio import GeneratedAudio

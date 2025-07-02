@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.models.database import SessionLocal
 from datetime import datetime
 from collections import Counter
 

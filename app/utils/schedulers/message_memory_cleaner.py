@@ -1,4 +1,4 @@
-from app.database import SessionLocal
+from app.models.database import SessionLocal
 from app.models.message_model import Message
 from app.models.user import User
 from app.utils.tier_logic import get_user_max_message_retention_days

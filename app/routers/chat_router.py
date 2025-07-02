@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Header, Request
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.models.database import SessionLocal
 
 from app.models.user import User, TierLevel
 from app.utils.auth_utils import ensure_token_user_match, require_token, get_memory_messages

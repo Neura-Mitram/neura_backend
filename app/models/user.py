@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, Enum
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from app.database import Base
+from app.models.database import Base
 import enum
 
 class TierLevel(enum.Enum):

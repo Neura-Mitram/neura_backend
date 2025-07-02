@@ -3,7 +3,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from app.database import Base  # ✅ absolute import
+from app.models.database import Base  # ✅ absolute import
 
 class InteractionLog(Base):
     __tablename__ = "interaction_logs"

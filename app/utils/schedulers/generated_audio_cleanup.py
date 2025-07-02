@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-from app.database import SessionLocal
+from app.models.database import SessionLocal
 from app.models.generated_audio import GeneratedAudio
 from app.models.user import User
 from app.utils.tier_logic import get_user_max_audio_retention_days

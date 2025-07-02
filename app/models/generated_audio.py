@@ -3,7 +3,7 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from app.database import Base
+from app.models.database import Base
 
 class GeneratedAudio(Base):
     __tablename__ = "generated_audio"

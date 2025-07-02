@@ -3,7 +3,7 @@
 import logging
 from app.utils.audio_processor import synthesize_voice
 from app.models import NotificationLog
-from app.database import SessionLocal
+from app.models.database import SessionLocal
 from datetime import datetime
 
 

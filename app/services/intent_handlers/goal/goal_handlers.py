@@ -1,5 +1,5 @@
 from app.models.goal import Goal
-from app.database import SessionLocal
+from app.models.database import SessionLocal
 from datetime import datetime
 from app.services.goal_progress_service import update_goal_progress
 

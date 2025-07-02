@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.models.database import SessionLocal
 from app.models.user import User
 from app.utils.auth_utils import require_token
 from app.utils.rate_limit_utils import get_tier_limit, limiter

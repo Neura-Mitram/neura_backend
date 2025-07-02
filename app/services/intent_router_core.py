@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from app.utils.auth_utils import require_token, ensure_token_user_match
 from app.utils.ai_engine import generate_ai_reply
-from app.database import SessionLocal
+from app.models.database import SessionLocal
 from app.models.user import User
 import json
 

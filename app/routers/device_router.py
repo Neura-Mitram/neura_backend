@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, validator
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.models.database import SessionLocal
 from typing import Optional
 from datetime import datetime
 

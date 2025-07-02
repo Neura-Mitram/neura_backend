@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.models.database import SessionLocal
 from app.models.user import User
 from app.models.goal import Goal
 from app.models.habit import Habit

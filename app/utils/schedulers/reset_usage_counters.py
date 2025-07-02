@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from datetime import datetime
-from app.database import SessionLocal
+from app.models.database import SessionLocal
 from app.models.user import User
 
 def reset_all_usage_counters():

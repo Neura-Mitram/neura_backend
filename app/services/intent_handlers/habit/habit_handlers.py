@@ -1,5 +1,5 @@
 from app.models.habit import Habit
-from app.database import SessionLocal
+from app.models.database import SessionLocal
 from datetime import datetime
 
 def handle_habit_modify(user, habit_id, updates):

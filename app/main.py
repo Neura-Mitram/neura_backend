@@ -6,8 +6,8 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 import os
 
-from app.database import engine
-from app import database
+from app.models.database import engine
+from app.models import database
 from app.models import *  # registers all models
 
 from app.routers import chat_router, anonymous_router, voice_router
