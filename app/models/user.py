@@ -39,7 +39,6 @@ class User(Base):
     is_verified = Column(Boolean, default=False)
 
     # ✅ Relationships
-    task_reminders = relationship("TaskReminder", back_populates="user", cascade="all, delete-orphan")
     audio_files = relationship("GeneratedAudio", back_populates="user", cascade="all, delete-orphan")
     interaction_logs = relationship("InteractionLog", back_populates="user", cascade="all, delete-orphan")
     journal_entries = relationship("JournalEntry", back_populates="user", cascade="all, delete-orphan")
