@@ -5,7 +5,6 @@ from app.database import SessionLocal
 from app.models.user import User, TierLevel
 from app.utils.auth_utils import ensure_token_user_match, require_token, get_memory_messages
 from app.models.message_model import Message
-from app.models.task_reminder import TaskReminder
 from app.utils.tier_logic import get_monthly_limit
 
 
