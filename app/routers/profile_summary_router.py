@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models.user import User
@@ -18,6 +18,7 @@ def get_db():
 @router.get("/profile-summary")
 @limiter.limit(get_tier_limit)
 async def profile_summary(
+    request: Request,
     user_data: dict = Depends(require_token),
     db: Session = Depends(get_db)
 ):
