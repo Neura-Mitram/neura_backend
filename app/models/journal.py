@@ -1,5 +1,5 @@
 # app/models/journal_entry.py
-from sqlalchemy import Column, Integer, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.database import Base
