@@ -5,6 +5,7 @@ from app.models.user import User
 from app.models.journal import JournalEntry
 from app.utils.auth_utils import ensure_token_user_match
 from fastapi import HTTPException
+from fastapi import Request
 
 async def handle_journal_list(request: Request, user: User, message: str, db: Session):
     # Ensure token-user match
