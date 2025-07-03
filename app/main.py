@@ -33,19 +33,9 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from fastapi.responses import JSONResponse
 
-from fastapi import APIRouter
 import requests
-
-router = APIRouter()
-
-@router.get("/my-ip")
-async def get_my_ip():
-    """
-    Temporary route to get your Space's public outbound IP.
-    """
-    ip = requests.get("https://api.ipify.org").text
-    return {"ip": ip}
-
+ip = requests.get("https://api64.ipify.org").text
+print("Hugging Face Space Public Outbound IP:", ip)
 
 
 # Create DB tables in one go
@@ -103,7 +93,7 @@ app.include_router(event_router.router)
 app.include_router(device_router.router)  # ✅ Now /update-device is active
 app.include_router(profile_summary_router.router)
 app.include_router(emotion_router.router)
-app.include_router(router)  # <-- here
+
 
 
 
