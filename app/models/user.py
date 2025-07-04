@@ -42,6 +42,7 @@ class User(Base):
     audio_files = relationship("GeneratedAudio", back_populates="user", cascade="all, delete-orphan")
     interaction_logs = relationship("InteractionLog", back_populates="user", cascade="all, delete-orphan")
     journal_entries = relationship("JournalEntry", back_populates="user", cascade="all, delete-orphan")
+    daily_checkins = relationship("DailyCheckin", back_populates="user", cascade="all, delete-orphan")
     notifications = relationship("NotificationLog", back_populates="user", cascade="all, delete-orphan")
 
     # ✅ Personalization
