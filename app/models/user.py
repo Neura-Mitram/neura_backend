@@ -39,11 +39,13 @@ class User(Base):
     is_verified = Column(Boolean, default=False)
 
     # ✅ Relationships
-    audio_files = relationship("GeneratedAudio", back_populates="user", cascade="all, delete-orphan")
     interaction_logs = relationship("InteractionLog", back_populates="user", cascade="all, delete-orphan")
     journal_entries = relationship("JournalEntry", back_populates="user", cascade="all, delete-orphan")
     daily_checkins = relationship("DailyCheckin", back_populates="user", cascade="all, delete-orphan")
     notifications = relationship("NotificationLog", back_populates="user", cascade="all, delete-orphan")
+    generated_audio = relationship("GeneratedAudio", back_populates="user", cascade="all, delete-orphan")
+    goal_entries = relationship("Goal", back_populates="user", cascade="all, delete-orphan")
+    habit_entries = relationship("Habit", back_populates="user", cascade="all, delete-orphan")
 
     # ✅ Personalization
     goal_focus = Column(String, default="balance")
