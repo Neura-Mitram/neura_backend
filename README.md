@@ -3,7 +3,7 @@ title: Neura Smart Assistant
 emoji: ⚡
 colorFrom: indigo
 colorTo: indigo
-sdk: docker
+sdk: fastapi
 pinned: false
 license: mit
 short_description: You Neura Smart  Assistant
