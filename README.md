@@ -5,7 +5,5 @@ colorFrom: indigo
 colorTo: indigo
 pinned: false
 license: mit
-short_description: You Neura Smart  Assistant
+short_description: Your Neura Smart Assistant backend
 ---
-
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
