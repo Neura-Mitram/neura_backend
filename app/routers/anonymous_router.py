@@ -30,6 +30,7 @@ def anonymous_login(payload: LoginRequest, db: Session = Depends(get_db)):
     if user:
         token = create_access_token({"sub": user.temp_uid})
         return {
+            "id": user.id,
             "message": "🔁 Returning user",
             "token": token,
             "user": {
@@ -53,6 +54,7 @@ def anonymous_login(payload: LoginRequest, db: Session = Depends(get_db)):
         "message": "🆕 New anonymous user created",
         "token": token,
         "user": {
+            "id": new_user.id,
             "device_id": new_user.temp_uid,
             "ai_name": new_user.ai_name,
             "voice": new_user.voice,
