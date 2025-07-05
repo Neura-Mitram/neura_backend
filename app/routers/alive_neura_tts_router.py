@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.models.database import SessionLocal
 from app.utils.auth_utils import require_token
 from app.schemas.tts_schemas import GenerateTTSRequest
-from app.utils.voice_utils import synthesize_voice
+from app.utils.audio_processor import synthesize_voice
 from app.utils.rate_limit_utils import get_tier_limit, limiter
 from pydantic import BaseModel
 
