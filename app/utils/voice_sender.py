@@ -8,6 +8,7 @@ from app.utils.audio_processor import synthesize_voice
 from app.models import NotificationLog
 from app.models.database import SessionLocal
 from datetime import datetime
+import os
 
 
 async def send_voice_to_neura(user_id: int, text: str) -> dict:
@@ -15,7 +16,14 @@ async def send_voice_to_neura(user_id: int, text: str) -> dict:
     Directly synthesizes audio and logs the notification.
     """
     # Synthesize the TTS audio
-    audio_filename = synthesize_voice(text)
+    audio_path = synthesize_voice(
+        text,
+        gender="male",  # or parameterize if you want
+        output_folder="/data/audio/voice_notifications"
+    )
+
+    # ✅ Extract filename
+    filename = os.path.basename(audio_path)
 
     # Log the notification in DB
     db = SessionLocal()
@@ -23,7 +31,7 @@ async def send_voice_to_neura(user_id: int, text: str) -> dict:
         notification = NotificationLog(
             user_id=user_id,
             text=text,
-            audio_url=f"/audio/voice_notifications/{audio_filename}",
+            audio_url=f"voice_notifications/{filename}",
             created_at=datetime.utcnow()
         )
         db.add(notification)
@@ -39,7 +47,8 @@ async def send_voice_to_neura(user_id: int, text: str) -> dict:
     finally:
         db.close()
 
+    # ✅ Consistent return URL
     return {
         "reply": text,
-        "audio_url": f"/audio/{audio_filename}"
+        "audio_url": f"/get-voice-chat-audio?user_id={user_id}&filename=voice_notifications/{filename}"
     }
