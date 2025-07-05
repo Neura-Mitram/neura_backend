@@ -4,7 +4,7 @@
 
 
 import os
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.models.database import SessionLocal
@@ -28,6 +28,7 @@ def get_db():
 @router.post("/generate-tts-audio-once")
 @limiter.limit(get_tier_limit)
 def generate_tts_audio_once(
+    request: Request,
     payload: GenerateTTSRequest,
     db: Session = Depends(get_db),
     user_data: dict = Depends(require_token)
