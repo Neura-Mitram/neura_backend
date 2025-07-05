@@ -116,14 +116,13 @@ async def rate_limit_exceeded_handler(request, exc):
 @app.get("/")
 def read_root():
     return {
-        "message": (
-            "👋 Welcome to Neura - Your Smart Assistant Backend.\n\n"
-            "This API powers Neura's intelligent voice and text interactions, proactive \n\n"
-            "and providing an open foundation for personal assistant experiences.\n\n"
-            "Copyright (c) © 2025 By Shiladitya Mallick.\n"
-            "This project is licensed under the MIT License. See the LICENSE file for full details."
-        )
+        "message": "👋 Welcome to Neura - Your Smart Assistant Backend",
+        "description": "This API powers Neura's intelligent voice and text interactions and provides an open foundation for proactive personal assistant experiences.",
+        "copyright": "© 2025 Shiladitya Mallick",
+        "license": "MIT License - See LICENSE file for details."
     }
+
+
 
 
 
