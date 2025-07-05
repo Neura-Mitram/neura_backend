@@ -1,3 +1,8 @@
+# Copyright (c) 2025 Shiladitya Mallick
+# This file is part of the Neura - Your Smart Assistant project.
+# Licensed under the MIT License - see the LICENSE file for details.
+
+
 from fastapi import Request, HTTPException, Depends
 from app.utils.auth_utils import require_token
 from app.models.database import SessionLocal

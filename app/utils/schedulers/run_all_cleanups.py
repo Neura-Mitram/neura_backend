@@ -1,3 +1,8 @@
+# Copyright (c) 2025 Shiladitya Mallick
+# This file is part of the Neura - Your Smart Assistant project.
+# Licensed under the MIT License - see the LICENSE file for details.
+
+
 from app.utils.schedulers.interaction_logs_cleanup import clean_old_interaction_logs
 from app.utils.schedulers.generated_audio_cleanup import delete_old_audio_files
 from app.utils.schedulers.notification_cleaner import delete_old_notification_logs

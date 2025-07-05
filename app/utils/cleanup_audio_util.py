@@ -1,3 +1,8 @@
+# Copyright (c) 2025 Shiladitya Mallick
+# This file is part of the Neura - Your Smart Assistant project.
+# Licensed under the MIT License - see the LICENSE file for details.
+
+
 def cleanup_audio_records(records, base_dir="/data/audio"):
     """
     Deletes files and records for any table storing a 'filename' or 'audio_file'.

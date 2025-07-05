@@ -1,14 +1,27 @@
+# Copyright (c) 2025 Shiladitya Mallick
+# This file is part of the Neura - Your Smart Assistant project.
+# Licensed under the MIT License - see the LICENSE file for details.
+
+
 import os
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from app.models.database import get_db
+from app.models.database import SessionLocal
 from app.utils.auth_utils import require_token
 from app.schemas.tts import GenerateTTSRequest
 from app.utils.voice_utils import synthesize_voice
 from app.utils.rate_limit_utils import get_tier_limit, limiter
 
 router = APIRouter()
+
+# Dependency to get DB session
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 @router.post("/generate-tts-audio-once")
 @limiter.limit(get_tier_limit)

@@ -1,3 +1,8 @@
+# Copyright (c) 2025 Shiladitya Mallick
+# This file is part of the Neura - Your Smart Assistant project.
+# Licensed under the MIT License - see the LICENSE file for details.
+
+
 from fastapi import HTTPException, Header
 from typing import Union
 from sqlalchemy.orm import Session  # ✅ Needed for type hinting in get_memory_messages

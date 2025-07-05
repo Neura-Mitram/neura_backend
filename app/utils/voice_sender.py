@@ -1,4 +1,7 @@
-# app/utils/voice_sender.py
+# Copyright (c) 2025 Shiladitya Mallick
+# This file is part of the Neura - Your Smart Assistant project.
+# Licensed under the MIT License - see the LICENSE file for details.
+
 
 import logging
 from app.utils.audio_processor import synthesize_voice

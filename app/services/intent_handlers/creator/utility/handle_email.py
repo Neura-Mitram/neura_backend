@@ -1,4 +1,7 @@
-# app/services/intent_handlers/creator_utility/handle_email.py
+# Copyright (c) 2025 Shiladitya Mallick
+# This file is part of the Neura - Your Smart Assistant project.
+# Licensed under the MIT License - see the LICENSE file for details.
+
 
 from fastapi import Request, HTTPException
 from sqlalchemy.orm import Session

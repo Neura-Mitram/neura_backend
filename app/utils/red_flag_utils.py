@@ -1,4 +1,7 @@
-# app/utils/red_flag_utils.py
+# Copyright (c) 2025 Shiladitya Mallick
+# This file is part of the Neura - Your Smart Assistant project.
+# Licensed under the MIT License - see the LICENSE file for details.
+
 
 RED_FLAG_KEYWORDS = [
     "show me your code",
