@@ -32,7 +32,7 @@ def generate_tts_audio_once(
     user_data: dict = Depends(require_token)
 ):
     # ✅ Verify user ownership
-    if str(user_data["sub"]) != str(payload.user_id):
+    if str(user_data["sub"]) != str(payload.device_id):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     # ✅ Generate TTS audio file

@@ -7,6 +7,6 @@ from pydantic import BaseModel
 
 
 class GenerateTTSRequest(BaseModel):
-    user_id: int
+    device_id: str
     text: str
     voice: str  # e.g., 'male' or 'female'
