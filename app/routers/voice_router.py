@@ -22,7 +22,7 @@ import mimetypes
 
 from app.utils.rate_limit_utils import get_tier_limit, limiter
 from app.schemas.intent_schemas import IntentRequest
-from app.services.intent_router_core import detect_and_route_intent, IntentRequest
+from app.services.intent_router_core import detect_and_route_intent
 
 from app.utils.red_flag_utils import detect_red_flag
 from app.utils.prompt_templates import red_flag_response, creator_info_response

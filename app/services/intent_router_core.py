@@ -12,6 +12,7 @@ from app.utils.ai_engine import generate_ai_reply
 from app.models.database import SessionLocal
 from app.models.user import User
 import json
+from app.schemas.intent_schemas import IntentRequest
 
 # Journal
 from app.services.intent_handlers.journal.handle_journal_add import handle_journal_add
@@ -91,11 +92,6 @@ ALL_VALID_INTENTS = [
         "creator_seo", "creator_email", "creator_time_planner",
         "creator_youtube_script", "creator_blog"
     ]
-
-class IntentRequest(BaseModel):
-    user_id: int
-    message: str
-    conversation_id: int = 1
 
 @router.post("/detect-intent")
 async def detect_and_route_intent(

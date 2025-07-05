@@ -5,7 +5,8 @@
 
 from pydantic import BaseModel
 
-class IntentRequest(BaseModel):
+
+class GenerateTTSRequest(BaseModel):
     user_id: int
-    message: str
-    conversation_id: int = 1
+    text: str
+    voice: str  # e.g., 'male' or 'female'

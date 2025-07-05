@@ -115,7 +115,10 @@ async def rate_limit_exceeded_handler(request, exc):
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to Neura AI backend Live"}
+    return {"message": "Welcome to Neura - smart Assistant backend Live"
+                       "Copyright (c) 2025 Shiladitya Mallick "
+                       "This file is part of the Neura - Your Smart Assistant project. "
+                       "Licensed under the MIT License - see the LICENSE file for details."}
 
 @app.get("/health", tags=["Infra"])
 def health_check():
