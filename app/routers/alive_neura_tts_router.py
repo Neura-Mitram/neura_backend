@@ -12,6 +12,7 @@ from app.utils.auth_utils import require_token
 from app.schemas.tts import GenerateTTSRequest
 from app.utils.voice_utils import synthesize_voice
 from app.utils.rate_limit_utils import get_tier_limit, limiter
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -23,6 +24,12 @@ def get_db():
     finally:
         db.close()
 
+
+
+class GenerateTTSRequest(BaseModel):
+    user_id: int
+    text: str
+    voice: str  # e.g., 'male' or 'female'
 @router.post("/generate-tts-audio-once")
 @limiter.limit(get_tier_limit)
 def generate_tts_audio_once(
