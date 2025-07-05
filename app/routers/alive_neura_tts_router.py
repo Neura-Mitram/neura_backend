@@ -2,8 +2,8 @@ import os
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-
-from app.dependencies import get_db, require_token
+from app.models.database import get_db
+from app.utils.auth_utils import require_token
 from app.schemas.tts import GenerateTTSRequest
 from app.utils.voice_utils import synthesize_voice
 from app.utils.rate_limit_utils import get_tier_limit, limiter
@@ -47,3 +47,6 @@ def generate_tts_audio_once(
             "Content-Length": str(len(data))
         }
     )
+
+
+
