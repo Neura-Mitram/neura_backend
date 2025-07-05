@@ -15,6 +15,7 @@ from app.routers import event_router
 from app.routers import device_router  # ✅ Add this
 from app.routers import profile_summary_router
 from app.routers import emotion_router
+from app.routers import alive_neura_tts_router
 
 from app.services.nudge_service import process_nudges
 
@@ -93,6 +94,7 @@ app.include_router(event_router.router)
 app.include_router(device_router.router)  # ✅ Now /update-device is active
 app.include_router(profile_summary_router.router)
 app.include_router(emotion_router.router)
+app.include_router(alive_neura_tts_router.router)
 
 
 
