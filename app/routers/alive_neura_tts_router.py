@@ -36,7 +36,11 @@ def generate_tts_audio_once(
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     # ✅ Generate TTS audio file
-    file_path = synthesize_voice(payload.text, payload.voice)
+    file_path = synthesize_voice(
+        payload.text,
+        gender=payload.voice,
+        output_folder="/data/audio/temp_audio"
+    )
 
     # ✅ Read file content
     try:
