@@ -24,7 +24,7 @@ def get_db():
         db.close()
 
 class DeviceUpdateRequest(BaseModel):
-    device_id: int
+    device_id: str
     device_type: Optional[str] = None
     os_version: Optional[str] = None
     device_token: Optional[str] = None
