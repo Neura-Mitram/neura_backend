@@ -6,7 +6,7 @@
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from app.models.database import SessionLocal
-from app.models.journal_entry import JournalEntry
+from app.models.journal import JournalEntry
 from app.models.user import User
 from app.utils.tier_logic import get_user_journal_retention_days
 import logging
