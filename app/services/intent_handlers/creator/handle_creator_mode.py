@@ -12,7 +12,7 @@ from app.services.emotion_tone_updater import update_emotion_status
 
 async def handle_creator_mode(request: Request, user: User, message: str, db: Session):
     # ✅ Validate token
-    await ensure_token_user_match(request, user.id)
+    # await ensure_token_user_match(request, user.id)
 
     # ✅ Pro-only
     if not is_pro_user(user):

@@ -14,7 +14,7 @@ from app.utils.prompt_templates import weekly_plan_prompt
 
 async def handle_creator_weekly_plan(request: Request, user: User, message: str, db: Session):
     # ✅ Validate token
-    await ensure_token_user_match(request, user.id)
+    # await ensure_token_user_match(request, user.id)
 
     # ✅ Pro tier only
     if not is_pro_user(user):

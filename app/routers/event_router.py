@@ -8,8 +8,10 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.models.database import SessionLocal
 from app.models.user import User
+from app.models.interaction_log import InteractionLog
 from app.utils.auth_utils import require_token, ensure_token_user_match
 from app.utils.voice_sender import send_voice_to_neura
+from datetime import datetime
 import logging
 import json
 from app.utils.notification_voice_trigger import trigger_voice_if_keyword_matched
@@ -25,8 +27,9 @@ def get_db():
     finally:
         db.close()
 
+# Input
 class EventInput(BaseModel):
-    user_id: int
+    device_id: str
     event_type: str  # e.g., "spotify_open", "gmail_open", "call_start"
     metadata: dict = {}  # Optional additional context
 
@@ -38,12 +41,12 @@ async def handle_event_push(
     user_data: dict = Depends(require_token)
 ):
     # ✅ Check token-user match
-    ensure_token_user_match(user_data["sub"], payload.user_id)
+    ensure_token_user_match(user_data["sub"], payload.device_id)
 
-    # ✅ Load user
-    user = db.query(User).filter(User.id == payload.user_id).first()
+    # ✅ Lookup user by device_id
+    user = db.query(User).filter(User.temp_uid == payload.device_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="User not found for this device_id")
 
     # 🔕 Skip if user preferences disable this feature
     if user.tier.value == "free" or not user.instant_alerts_enabled:
@@ -54,13 +57,22 @@ async def handle_event_push(
 
     # ✅ Keyword-triggered voice notification
     keyword_result = await trigger_voice_if_keyword_matched(
+        request=request,
         user=user,
         source=payload.event_type,
         content=json.dumps(payload.metadata or {}),
         db=db
     )
 
-    # ✅ Normal event prompt
+    # 🛑 If keyword triggered, short-circuit and return
+    if keyword_result.get("status") == "sent":
+        return {
+            "status": "completed",
+            "trigger_type": "keyword",
+            "details": keyword_result
+        }
+
+    # ✅ Build fallback event prompt
     emotion = user.emotion_status or "love"
     context = f"Context: {payload.metadata}" if payload.metadata else ""
 
@@ -93,18 +105,43 @@ async def handle_event_push(
     tone_prompt = prompt_variants.get(emotion, fallback_prompt)
     full_prompt = f"{tone_prompt} {context}".strip()
 
-    logger.info(f"📲 Event trigger: {payload.event_type} | Emotion: {emotion} | User: {user.id}")
+    logger.info(f"📲 Event trigger: {payload.event_type} | Emotion: {emotion} | Device: {payload.device_id}")
 
+    # ✅ Log to InteractionLog
     try:
-        result = await send_voice_to_neura(user.id, full_prompt)
+        log = InteractionLog(
+            user_id=user.id,
+            source_app=payload.event_type,
+            intent="proactive_nudge",
+            content=full_prompt,
+            timestamp=datetime.utcnow()
+        )
+        db.add(log)
+        db.commit()
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to log interaction: {e}")
+
+    # ✅ Fallback voice synthesis
+    try:
+        result = await send_voice_to_neura(
+            request=request,
+            device_id=payload.device_id,
+            text=full_prompt,
+            gender=user.voice
+        )
         return {
             "status": "completed",
             "keyword_trigger": keyword_result,
             "event_trigger": {
                 "prompt": full_prompt,
                 "details": result
-            }
+            },
+            "emotion": emotion
         }
     except Exception as e:
-        logger.error(f"❌ Voice send failed for user {user.id}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to deliver voice event")
+        logger.error(f"❌ Voice synthesis failed: {str(e)}")
+        # ✅ Fallback to text response
+        return {
+            "status": "voice_failed",
+            "fallback_text": full_prompt
+        }

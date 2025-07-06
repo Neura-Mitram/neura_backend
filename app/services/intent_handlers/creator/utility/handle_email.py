@@ -14,7 +14,7 @@ from app.utils.prompt_templates import email_prompt
 
 async def handle_creator_email(request: Request, user: User, message: str, db: Session):
     # ✅ Validate token
-    await ensure_token_user_match(request, user.id)
+    # await ensure_token_user_match(request, user.id)
 
     # ✅ Pro-only
     if not is_pro_user(user):

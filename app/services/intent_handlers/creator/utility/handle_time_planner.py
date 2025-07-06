@@ -14,7 +14,7 @@ from app.utils.prompt_templates import time_planner_prompt
 
 async def handle_creator_time_planner(request: Request, user: User, message: str, db: Session):
     # ✅ Validate token
-    await ensure_token_user_match(request, user.id)
+    # await ensure_token_user_match(request, user.id)
 
     # ✅ Pro-tier enforcement
     if not is_pro_user(user):

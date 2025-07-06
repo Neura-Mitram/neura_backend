@@ -11,6 +11,7 @@ from collections import Counter
 
 from app.utils.auth_utils import require_token
 from app.models.message_model import Message
+from app.models.user import User
 from app.utils.rate_limit_utils import get_tier_limit, limiter
 
 router = APIRouter()
@@ -46,12 +47,15 @@ async def emotion_summary(
     if end < start:
         raise HTTPException(status_code=400, detail="End date cannot be before start date.")
 
-    user_id = user_data["sub"]
+    # ✅ Load user via device_id
+    user = db.query(User).filter(User.temp_uid == user_data["sub"]).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
 
     # Query messages
     messages = (
         db.query(Message)
-        .filter(Message.user_id == user_id)
+        .filter(Message.user_id == user.id)
         .filter(Message.timestamp >= start)
         .filter(Message.timestamp <= end)
         .all()

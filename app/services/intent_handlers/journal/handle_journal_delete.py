@@ -15,7 +15,7 @@ from fastapi import Request
 
 async def handle_journal_delete(request: Request, user: User, message: str, db: Session):
     # Ensure token-user match
-    await ensure_token_user_match(request, user.id)
+    # await ensure_token_user_match(request, user.id)
 
     prompt = journal_delete_prompt(message)
 

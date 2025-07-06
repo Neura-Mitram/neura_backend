@@ -17,7 +17,7 @@ from app.utils.prompt_templates import checkin_modify_prompt
 
 async def handle_checkin_modify(request: Request, user: User, message: str, db: Session):
     # ✅ Ensure secure match
-    await ensure_token_user_match(request, user.id)
+    # await ensure_token_user_match(request, user.id)
 
     # 🔍 Emotion Detection from message
     emotion_label = await update_emotion_status(user, message, db)

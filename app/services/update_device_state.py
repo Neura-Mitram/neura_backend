@@ -11,7 +11,7 @@ from datetime import datetime
 
 async def handle_update_device_state(request: Request, db: Session, user: User, intent_payload: dict):
     try:
-        await ensure_token_user_match(request, user.id)
+        # await ensure_token_user_match(request, user.id)
 
         # Update ambient assistant config from payload
         user.output_audio_mode = intent_payload.get("output_audio_mode", user.output_audio_mode)

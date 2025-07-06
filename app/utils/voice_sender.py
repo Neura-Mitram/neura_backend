@@ -5,41 +5,49 @@
 
 import logging
 from app.utils.audio_processor import synthesize_voice
-from app.models import NotificationLog
+from app.models.notification import NotificationLog
 from app.models.database import SessionLocal
 from datetime import datetime
 import os
+from fastapi import Request
+from typing import Optional
 
+logger = logging.getLogger(__name__)
 
-async def send_voice_to_neura(user_id: int, text: str) -> dict:
+async def send_voice_to_neura(
+    text: str,
+    device_id: str,
+    gender: str = "male",
+    request: Optional[Request] = None
+) -> dict:
     """
-    Directly synthesizes audio and logs the notification.
+    Synthesizes voice and logs the notification.
     """
-    # Synthesize the TTS audio
+    # Synthesize audio
     audio_path = synthesize_voice(
         text,
-        gender="male",  # or parameterize if you want
+        gender=gender,
         output_folder="/data/audio/voice_notifications"
     )
 
-    # ✅ Extract filename
     filename = os.path.basename(audio_path)
 
-    # Log the notification in DB
+    # Log to DB
     db = SessionLocal()
     try:
         notification = NotificationLog(
-            user_id=user_id,
+            user_id=None,  # Optional: you can adjust this if you want to link to numeric user ID
+            device_id=device_id,
             text=text,
             audio_url=f"voice_notifications/{filename}",
             created_at=datetime.utcnow()
         )
         db.add(notification)
         db.commit()
-        logging.info(f"[VoiceSender] Synthesized audio for user {user_id}")
+        logger.info(f"[VoiceSender] Synthesized audio for device {device_id}")
     except Exception as e:
         db.rollback()
-        logging.error(f"[VoiceSender] Failed to log notification: {str(e)}")
+        logger.error(f"[VoiceSender] Failed to log notification: {str(e)}")
         return {
             "reply": text,
             "audio_url": None
@@ -47,8 +55,13 @@ async def send_voice_to_neura(user_id: int, text: str) -> dict:
     finally:
         db.close()
 
-    # ✅ Consistent return URL
+    # Build public URL
+    if request:
+        public_url = str(request.base_url) + f"audio/voice_notifications/{filename}"
+    else:
+        public_url = f"/audio/voice_notifications/{filename}"
+
     return {
         "reply": text,
-        "audio_url": f"/get-voice-chat-audio?user_id={user_id}&filename=voice_notifications/{filename}"
+        "audio_url": public_url
     }

@@ -2,7 +2,7 @@
 # This file is part of the Neura - Your Smart Assistant project.
 # Licensed under the MIT License - see the LICENSE file for details.
 
-
+import logging
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from app.models.database import SessionLocal
@@ -14,6 +14,9 @@ from app.models.notification import NotificationLog
 from app.utils.audio_processor import synthesize_voice
 from app.utils.tier_logic import is_voice_ping_allowed
 import os
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 # -------------------------------
 # Cron Job or Scheduler Logic
@@ -71,108 +74,12 @@ def decide_delivery_channel(user: User) -> str:
         return "local_notification"
     return "in_chat"
 
-def process_nudges():
-    """
-    Main scheduler loop to process nudges for all active users.
-    """
-    db = SessionLocal()
-    users = db.query(User).filter(User.is_active == True).all()
-
-    for user in users:
-        overdue_goals = get_overdue_goals(user, db)
-        overdue_habits = get_stale_habits(user, db)
-
-        if not overdue_goals and not overdue_habits:
-            continue
-
-        if not should_nudge(user):
-            continue
-
-        channel = decide_delivery_channel(user)
-
-        if channel == "voice":
-            send_voice_nudge(user, overdue_goals, overdue_habits)
-        elif channel == "local_notification":
-            store_local_notification(user, overdue_goals, overdue_habits)
-        else:
-            store_in_chat_prompt(user, overdue_goals, overdue_habits)
-
-        user.nudge_last_sent = datetime.utcnow()
-        user.nudge_last_type = channel
-        db.commit()
-
 
 # -------------------------------
-# Nudge Type Delivery Functions
+# Delivery functions
 # -------------------------------
 
-def send_voice_nudge(user, goals, habits):
-    """
-    Builds voice nudge text, synthesizes audio using AWS Polly,
-    and stores a NotificationLog record.
-    """
-    text = build_nudge_text(user, goals, habits)
-
-    audio_path = synthesize_voice(
-        text,
-        gender = user.voice if user.voice in ["male", "female"] else "male",
-        output_folder="/data/audio/voice_notifications"
-    )
-
-    db = SessionLocal()
-    notification = NotificationLog(
-        user_id=user.id,
-        content=text,
-        type="voice_nudge",
-        audio_file=os.path.join("voice_notifications", os.path.basename(audio_path)),
-        created_at=datetime.utcnow()
-    )
-    try:
-        db.add(notification)
-        db.commit()
-    except Exception as e:
-        print(f"DB commit failed: {e}")
-        if os.path.exists(audio_path):
-            os.remove(audio_path)
-        raise
-
-    print(f"[VOICE NUDGE] Created for {user.name}")
-    print(f"[VOICE AUDIO]: {audio_path}")
-
-def store_in_chat_prompt(user, goals, habits):
-    """
-    Stores a prompt message to show in chat when the user opens the app.
-    """
-    text = build_nudge_text(user, goals, habits)
-    db = SessionLocal()
-    message = Message(
-        user_id=user.id,
-        role="assistant",
-        content=text,
-        is_prompt=True,
-        metadata="in_chat"
-    )
-    db.add(message)
-    db.commit()
-    print(f"[IN-CHAT PROMPT] stored for {user.name}")
-
-def store_local_notification(user, goals, habits):
-    """
-    Stores a notification record for showing as a local notification in the app.
-    """
-    text = build_nudge_text(user, goals, habits)
-    db = SessionLocal()
-    notification = NotificationLog(
-        user_id=user.id,
-        content=text,
-        type="local_notification",
-        created_at=datetime.utcnow()
-    )
-    db.add(notification)
-    db.commit()
-    print(f"[LOCAL NOTIFICATION] stored for {user.name}")
-
-def build_nudge_text(user, goals, habits):
+def build_nudge_text(user: User, goals, habits):
     """
     Assembles the friendly text to deliver.
     """
@@ -192,3 +99,101 @@ def build_nudge_text(user, goals, habits):
         f"{body}\n\n"
         "Tap to review or say 'Mark as done' anytime!"
     )
+
+# -------------------------------
+# Nudge Type Delivery Functions
+# -------------------------------
+
+def send_voice_nudge(user: User, goals, habits, db: Session):
+    """
+    Builds voice nudge text, synthesizes audio using AWS Polly,
+    and stores a NotificationLog record.
+    """
+    text = build_nudge_text(user, goals, habits)
+
+    audio_path = synthesize_voice(
+        text,
+        gender = user.voice if user.voice in ["male", "female"] else "male",
+        output_folder="/data/audio/voice_notifications"
+    )
+
+    notification = NotificationLog(
+        user_id=user.id,
+        content=text,
+        type="voice_nudge",
+        audio_file=os.path.join("voice_notifications", os.path.basename(audio_path)),
+        created_at=datetime.utcnow()
+    )
+    db.add(notification)
+    logger.info("[VOICE NUDGE] Created for %s (%s)", user.name, audio_path)
+
+def store_local_notification(user: User, goals, habits, db: Session):
+    """
+    Stores a notification record for showing as a local notification in the app.
+    """
+    text = build_nudge_text(user, goals, habits)
+    notification = NotificationLog(
+        user_id=user.id,
+        content=text,
+        type="local_notification",
+        created_at=datetime.utcnow()
+    )
+    db.add(notification)
+    logger.info("[LOCAL NOTIFICATION] Stored for %s", user.name)
+
+def store_in_chat_prompt(user, goals, habits, db: Session):
+    """
+    Stores a prompt message to show in chat when the user opens the app.
+    """
+    text = build_nudge_text(user, goals, habits)
+    message = Message(
+        user_id=user.id,
+        role="assistant",
+        content=text,
+        is_prompt=True,
+        metadata="in_chat"
+    )
+    db.add(message)
+    logger.info("[IN-CHAT PROMPT] Stored for %s", user.name)
+
+# -------------------------------
+# Main scheduler
+# -------------------------------
+
+def process_nudges():
+    """Main scheduler loop to process nudges for all active users."""
+    db = SessionLocal()
+    try:
+        users = db.query(User).filter(User.is_active == True).all()
+
+        for user in users:
+            try:
+                overdue_goals = get_overdue_goals(user, db)
+                overdue_habits = get_stale_habits(user, db)
+
+                if not overdue_goals and not overdue_habits:
+                    continue
+
+                if not should_nudge(user):
+                    continue
+
+                channel = decide_delivery_channel(user)
+
+                if channel == "voice":
+                    send_voice_nudge(user, overdue_goals, overdue_habits, db)
+                elif channel == "local_notification":
+                    store_local_notification(user, overdue_goals, overdue_habits, db)
+                else:
+                    store_in_chat_prompt(user, overdue_goals, overdue_habits, db)
+
+                user.nudge_last_sent = datetime.utcnow()
+                user.nudge_last_type = channel
+                db.commit()
+
+            except Exception as e:
+                db.rollback()
+                logger.error("⚠️ Failed to process nudge for user %s: %s", user.id, str(e))
+
+    finally:
+        db.close()
+

@@ -13,7 +13,7 @@ import json
 from app.utils.prompt_templates import checkin_delete_prompt
 
 async def handle_checkin_delete(request, user: User, message: str, db: Session):
-    await ensure_token_user_match(request, user.id)
+    # await ensure_token_user_match(request, user.id)
     """
     Uses Mistral to identify the check-in ID or date to delete.
     """

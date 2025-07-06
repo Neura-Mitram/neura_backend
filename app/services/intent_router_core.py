@@ -93,13 +93,17 @@ ALL_VALID_INTENTS = [
         "creator_youtube_script", "creator_blog"
     ]
 
-@router.post("/detect-intent")
+
 async def detect_and_route_intent(
     request: Request,
     payload: IntentRequest,
     db: Session = Depends(get_db),
     user_data: dict = Depends(require_token)
 ):
+    """
+        Internal helper function to detect intent and dispatch.
+    """
+
     ensure_token_user_match(user_data["sub"], payload.user_id)
 
     user = db.query(User).filter(User.id == payload.user_id).first()
@@ -199,7 +203,7 @@ async def detect_and_route_intent(
 
     # Goal
     elif intent == "goal":
-        result = await handle_add_goal(request, user, payload.message, db)
+        result = await handle_goal_add(request, user, payload.message, db)
     elif intent == "goal_list":
         result = await handle_list_goals(request, user, payload.message, db)
     elif intent == "goal_modify":

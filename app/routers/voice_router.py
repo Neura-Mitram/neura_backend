@@ -49,51 +49,50 @@ def get_db():
 @limiter.limit(get_tier_limit)
 async def voice_chat_with_neura(
     request: Request,
-    user_id: int = Form(...),
+    device_id: str = Form(...),
     conversation_id: int = Form(None),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     user_data: dict = Depends(require_token)
 ):
     """
-    Accepts voice input, transcribes it, detects intent,
-    and either respo-nds via fallback chat+TTS or routes to int-ent handler.
+    Accepts voice input, transcribes, detects intent,
+    and responds via fallback chat+TTS or routes to intent handler.
     """
 
     # ✅ Authentication
-    ensure_token_user_match(user_data["sub"], user_id)
+    ensure_token_user_match(user_data["sub"], device_id)
 
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.temp_uid == device_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # ✅ Validate MIME type file
+    # ✅ Validate MIME type
     if file.content_type not in ["audio/wav", "audio/x-wav", "audio/mp3"]:
         raise HTTPException(status_code=400, detail="Invalid audio format. Use WAV or MP3.")
 
-    # ✅ Tier limit logic
+    # ✅ Usage limits
     monthly_limit = get_monthly_limit(user.tier)
-    if user.tier == TierLevel.free:
-        total_usage = user.monthly_gpt_count + user.monthly_voice_count
-        if total_usage >= monthly_limit:
-            return {
-                "reply": f"⚠️ You've used your {monthly_limit} total messages this month. Upgrade your plan.",
-                "memory_enabled": user.memory_enabled,
-                "messages_used_this_month": total_usage,
-                "messages_remaining": 0,
-                "audio_url": None
-            }
-    else:
-        if user.monthly_voice_count >= monthly_limit:
-            return {
-                "reply": f"⚠️ You've used your {monthly_limit} voice messages for {user.tier} this month.",
-                "memory_enabled": user.memory_enabled,
-                "messages_used_this_month": user.monthly_voice_count,
-                "messages_remaining": 0,
-                "audio_url": None
-            }
+    total_usage = user.monthly_gpt_count + user.monthly_voice_count
+    if user.tier == TierLevel.free and total_usage >= monthly_limit:
+        return {
+            "reply": f"⚠️ You've used your {monthly_limit} messages this month.",
+            "memory_enabled": user.memory_enabled,
+            "messages_used_this_month": total_usage,
+            "messages_remaining": 0,
+            "audio_url": None
+        }
 
-    # ✅ Save file temporarily
+    if user.tier != TierLevel.free and user.monthly_voice_count >= monthly_limit:
+        return {
+            "reply": f"⚠️ You've used your {monthly_limit} voice messages this month.",
+            "memory_enabled": user.memory_enabled,
+            "messages_used_this_month": user.monthly_voice_count,
+            "messages_remaining": 0,
+            "audio_url": None
+        }
+
+    # ✅ Store audio temporarily
     filename = f"temp_{uuid.uuid4()}.wav"
     filepath = os.path.join("/data/audio/temp_audio", filename)
     with open(filepath, "wb") as f:
@@ -101,34 +100,27 @@ async def voice_chat_with_neura(
 
     # ✅ Transcribe
     try:
-       transcript = transcribe_audio(filepath)
+        transcript = transcribe_audio(filepath)
     finally:
-       if os.path.exists(filepath):
-          os.remove(filepath)
+        if os.path.exists(filepath):
+            os.remove(filepath)
 
     # ✅ Update emotion
     emotion_label = await update_emotion_status(user, transcript, db)
 
     # 🚩 Red flag detection
     red_flag = detect_red_flag(transcript)
-    if red_flag == "code":
+    if red_flag:
+        reply = red_flag_response(red_flag) if red_flag == "code" else creator_info_response()
         return {
-            "reply": red_flag_response("code or internal details"),
-            "memory_enabled": user.memory_enabled,
-            "messages_used_this_month": user.monthly_voice_count,
-            "messages_remaining": monthly_limit - user.monthly_voice_count,
-            "audio_url": None
-        }
-    if red_flag == "creator":
-        return {
-            "reply": creator_info_response(),
+            "reply": reply,
             "memory_enabled": user.memory_enabled,
             "messages_used_this_month": user.monthly_voice_count,
             "messages_remaining": monthly_limit - user.monthly_voice_count,
             "audio_url": None
         }
 
-    # ✅ Detect intent
+    # ✅ Intent detection
     intent_prompt = f"""
     You are an assistant that classifies user intent.
     Return ONLY one word from this list:
@@ -152,31 +144,29 @@ async def voice_chat_with_neura(
     intent_raw = generate_ai_reply(intent_prompt)
     intent = intent_raw.strip().lower()
 
-    # ✅ If fallback, do chat
+    # ✅ Fallback chat flow
     if intent == "fallback":
-        # Important tagging
         important_keywords = ["remember", "goal", "habit", "remind", "dream", "mission"]
         is_important = any(word in transcript.lower() for word in important_keywords)
 
-        # Build chat history
         if user.memory_enabled:
             chat_history = build_chat_history(db, user.id, conversation_id=conversation_id or 1)
             full_prompt = f"{chat_history}\nUser: {transcript}\n{ASSISTANT_NAME}:"
         else:
             full_prompt = transcript
 
-        # Generate reply
         assistant_reply = generate_ai_reply(full_prompt)
 
-        # Synthesize voice
-        voice_gender = user.voice if user.voice in ["male", "female"] else "male"
-
-        # Audio output folders
+        # Synthesize TTS to /voice_chat
         output_folder = "/data/audio/voice_chat"
+        voice_gender = user.voice if user.voice in ["male", "female"] else "male"
+        audio_output_path = synthesize_voice(
+            assistant_reply,
+            gender=voice_gender,
+            output_folder=output_folder
+        )
 
-        audio_output_path = synthesize_voice(assistant_reply, gender=voice_gender, output_folder=output_folder)
-
-        # Save messages
+        # Save memory
         if user.memory_enabled:
             db.add_all([
                 Message(
@@ -192,13 +182,13 @@ async def voice_chat_with_neura(
                     sender="assistant",
                     message=assistant_reply,
                     important=False
-                ),
+                )
             ])
 
-        # Save audio record
+        # Save GeneratedAudio
         generated_audio = GeneratedAudio(
             user_id=user.id,
-            filename= os.path.join("voice_chat", os.path.basename(audio_output_path))
+            filename=os.path.join("voice_chat", os.path.basename(audio_output_path))
         )
         db.add(generated_audio)
 
@@ -212,95 +202,23 @@ async def voice_chat_with_neura(
             "memory_enabled": user.memory_enabled,
             "messages_used_this_month": user.monthly_voice_count,
             "messages_remaining": monthly_limit - user.monthly_voice_count,
-            "audio_url": f"/get-voice-chat-audio?user_id={user.id}&filename={os.path.join('voice_chat', os.path.basename(audio_output_path))}"
-
+            "audio_url": f"/audio/voice_chat/{os.path.basename(audio_output_path)}"
         }
 
-    # ✅ If intent is something else, call intent router
-    else:
-        # Emulate IntentRequest
-        intent_payload = IntentRequest(
-            user_id=user.id,
-            message=transcript,
-            conversation_id=conversation_id or 1
-        )
-        intent_result = await detect_and_route_intent(
-            request=request,
-            payload=intent_payload,
-            db=db,
-            user_data=user_data
-        )
-
-        return {
-            **intent_result,
-            "emotion": emotion_label
-        }
-
-
-# ---------------------- AUDIO STREAMING ENDPOINT ----------------------
-class GetAudioRequest(BaseModel):
-    user_id: int
-    filename: str
-@router.get("/get-voice-chat-audio")
-@limiter.limit(get_tier_limit)
-async def get_voice_chat_audio(
-    payload: GetAudioRequest,
-    request: Request,
-    db: Session = Depends(get_db),
-    user_data: dict = Depends(require_token)
-):
-    """
-        Streams audio file back to client, supporting Range requests.
-    """
-
-    ensure_token_user_match(user_data["sub"], payload.user_id)
-
-    # Validate file extension
-    if not payload.filename.lower().endswith((".mp3", ".wav")):
-        raise HTTPException(status_code=400, detail="Invalid file type.")
-
-    audio_record = (
-        db.query(GeneratedAudio)
-        .filter(GeneratedAudio.user_id == payload.user_id)
-        .filter(GeneratedAudio.filename == payload.filename)
-        .first()
+    # ✅ Otherwise, route to intent
+    intent_payload = IntentRequest(
+        user_id=user.id,
+        message=transcript,
+        conversation_id=conversation_id or 1
     )
-    if not audio_record:
-        raise HTTPException(status_code=404, detail="Audio not found or access denied")
-
-    file_path = os.path.join("/data/audio", payload.filename)
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Audio file missing on disk")
-
-    file_size = os.path.getsize(file_path)
-    content_type, _ = mimetypes.guess_type(file_path)
-    content_type = content_type or "audio/mpeg"
-
-    range_header = request.headers.get("range")
-    if range_header:
-        start = int(range_header.replace("bytes=", "").split("-")[0])
-        end = file_size - 1
-        length = end - start + 1
-        with open(file_path, "rb") as f:
-            f.seek(start)
-            data = f.read(length)
-        return StreamingResponse(
-            iter([data]),
-            status_code=206,
-            media_type=content_type,
-            headers={
-                "Content-Range": f"bytes {start}-{end}/{file_size}",
-                "Accept-Ranges": "bytes",
-                "Content-Length": str(length),
-            },
-        )
-
-    # Return file with extension
-    return FileResponse(
-        file_path,
-        media_type=content_type,
-        headers={
-            "Content-Disposition": f'inline; filename="{os.path.basename(payload.filename)}"'
-        }
+    intent_result = await detect_and_route_intent(
+        request=request,
+        payload=intent_payload,
+        db=db,
+        user_data=user_data
     )
+    return {
+        **intent_result,
+        "emotion": emotion_label
+    }
 

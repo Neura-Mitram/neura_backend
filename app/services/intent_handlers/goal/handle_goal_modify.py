@@ -16,7 +16,7 @@ from app.utils.prompt_templates import goal_modify_prompt
 
 async def handle_modify_goal(request: Request, user: User, message: str, db: Session):
     # Ensure token-user match
-    await ensure_token_user_match(request, user.id)
+    # await ensure_token_user_match(request, user.id)
 
     # 🔍 Emotion Detection
     emotion_label = await update_emotion_status(user, message, db)

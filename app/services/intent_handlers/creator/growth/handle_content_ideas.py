@@ -14,7 +14,7 @@ from app.utils.prompt_templates import content_ideas_prompt
 
 async def handle_creator_content_ideas(request: Request, user: User, message: str, db: Session):
     # ✅ Verify token
-    await ensure_token_user_match(request, user.id)
+    # await ensure_token_user_match(request, user.id)
 
     # ✅ Require Pro tier
     if not is_pro_user(user):

@@ -8,12 +8,12 @@ from sqlalchemy.orm import Session
 from app.models.database import SessionLocal
 
 from app.models.user import User, TierLevel
-from app.utils.auth_utils import ensure_token_user_match, require_token, get_memory_messages
+from app.utils.auth_utils import ensure_token_user_match, require_token
 from app.models.message_model import Message
 from app.utils.tier_logic import get_monthly_limit
 
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from app.utils.ai_engine import generate_ai_reply
 from datetime import datetime
@@ -47,7 +47,7 @@ def get_db():
 
 
 class ChatRequest(BaseModel):
-    user_id: int
+    device_id: str
     message: str
     conversation_id: int = 1
 @router.post("/chat-with-neura")
@@ -59,9 +59,9 @@ async def chat_with_neura(
     user_data: dict = Depends(require_token)
 ):
     # ✅ Auth
-    ensure_token_user_match(user_data["sub"], payload.user_id)
+    ensure_token_user_match(user_data["sub"], payload.device_id)
 
-    user = db.query(User).filter(User.id == payload.user_id).first()
+    user = db.query(User).filter(User.temp_uid == payload.device_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -117,7 +117,7 @@ async def chat_with_neura(
         }
 
     # ✅ Update emotion
-    emotion_label = await update_emotion_status(user, user_query, db)
+    emotion_label = await update_emotion_status(user, payload.message, db)
 
     # ✅ Detect intent first
     intent_prompt = f"""
@@ -158,7 +158,7 @@ async def chat_with_neura(
     intent_result = await detect_and_route_intent(
         request=request,
         payload=IntentRequest(
-            user_id=payload.user_id,
+            user_id=user.id,
             message=payload.message,
             conversation_id=payload.conversation_id
         ),
@@ -169,42 +169,4 @@ async def chat_with_neura(
     return {
         **intent_result,
         "emotion": emotion_label
-    }
-
-class MemoryLogRequest(BaseModel):
-    user_id: int
-    conversation_id: int = 1
-    limit: int = 10
-    offset: int = 0
-
-@router.post("/memory-log")
-@limiter.limit(get_tier_limit)
-def get_memory_log(
-    request: Request,
-    payload: MemoryLogRequest,
-    db: Session = Depends(get_db),
-    user_data: dict = Depends(require_token)
-):
-    ensure_token_user_match(user_data["sub"], payload.user_id)
-
-    user = db.query(User).filter(User.id == payload.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    if not user.memory_enabled:
-        return {"message": "Memory is disabled for this user."}
-
-    messages = get_memory_messages(db, user.id, payload.limit, offset=payload.offset, conversation_id=payload.conversation_id)
-
-    return {
-        "memory_enabled": user.memory_enabled,
-        "conversation_id": payload.conversation_id,
-        "messages": [
-            {
-                "sender": msg.sender,
-                "message": msg.message,
-                "timestamp": msg.timestamp.isoformat(),
-                "important": msg.important
-            } for msg in messages
-        ]
     }

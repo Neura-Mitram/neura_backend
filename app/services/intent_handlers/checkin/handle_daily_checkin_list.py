@@ -12,7 +12,7 @@ from datetime import datetime
 
 async def handle_checkin_list(request: Request, db: Session, user: User, intent_payload: dict):
     try:
-        await ensure_token_user_match(request, user.id)
+        # await ensure_token_user_match(request, user.id)
 
         checkins = db.query(DailyCheckin).filter(
             DailyCheckin.user_id == user.id

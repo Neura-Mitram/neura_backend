@@ -8,6 +8,10 @@ from datetime import datetime
 from app.models.database import SessionLocal
 from app.models.user import User
 
+import logging
+
+logger = logging.getLogger("cleanup")
+
 def reset_all_usage_counters():
     """
     Resets monthly GPT, voice, and creator counts for all users.
@@ -16,14 +20,16 @@ def reset_all_usage_counters():
     db: Session = SessionLocal()
     try:
         users = db.query(User).all()
+        total_reset = 0
         for user in users:
             user.monthly_gpt_count = 0
             user.monthly_voice_count = 0
             user.monthly_creator_count = 0
             user.last_gpt_reset = datetime.utcnow()
+            total_reset += 1
         db.commit()
-        print("✅ All user usage counters have been reset.")
+        logger.info(f"✅ Monthly usage counters reset for {total_reset} users.")
     except Exception as e:
-        print(f"❌ Error resetting usage counters: {e}")
+        logger.error(f"🛑 Failed to reset usage counters: {e}", exc_info=True)
     finally:
         db.close()

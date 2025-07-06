@@ -3,7 +3,7 @@
 # Licensed under the MIT License - see the LICENSE file for details.
 
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session
 from app.models.database import SessionLocal
 from app.models.user import User
@@ -24,16 +24,20 @@ def get_db():
 @limiter.limit(get_tier_limit)
 async def profile_summary(
     request: Request,
+    device_id: str = Query(..., description="The device_id assigned during anonymous login"),
     user_data: dict = Depends(require_token),
     db: Session = Depends(get_db)
 ):
-    user_id = int(user_data["sub"])
+    """
+        Returns all profile details for the user identified by device_id.
+    """
 
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.temp_uid == device_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="User not found for this device_id")
 
     return {
+        "device_id": user.temp_uid,
         "id": user.id,
         "name": user.name,
         "tier": user.tier.value,

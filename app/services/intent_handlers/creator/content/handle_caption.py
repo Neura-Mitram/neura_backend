@@ -14,7 +14,7 @@ from app.utils.prompt_templates import caption_prompt
 
 async def handle_creator_caption(request: Request, user: User, message: str, db: Session):
     # ✅ Verify token match
-    await ensure_token_user_match(request, user.id)
+    # await ensure_token_user_match(request, user.id)
 
     # ✅ Pro tier required
     if not is_pro_user(user):

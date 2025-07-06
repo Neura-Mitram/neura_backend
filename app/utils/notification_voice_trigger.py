@@ -5,6 +5,7 @@
 
 import logging
 from sqlalchemy.orm import Session
+from fastapi import Request
 from app.models.user import User
 from app.utils.voice_sender import send_voice_to_neura
 
@@ -23,7 +24,12 @@ def is_keyword_matched(content: str, keywords_str: str) -> bool:
 def build_prompt(source: str, content: str) -> str:
     return f"You just received a {source} message: {content}\nGive a short voice notification with empathy."
 
-async def trigger_voice_if_keyword_matched(user: User, source: str, content: str, db: Session) -> dict:
+async def trigger_voice_if_keyword_matched(
+        request: Request,
+        user: User,
+        source: str,
+        content: str,
+        db: Session) -> dict:
     if not user.instant_alerts_enabled:
         logger.info(f"🔕 Skipped: Instant alerts disabled for user {user.id}")
         return {"status": "skipped", "reason": "alerts_disabled"}
@@ -39,7 +45,14 @@ async def trigger_voice_if_keyword_matched(user: User, source: str, content: str
     prompt = build_prompt(source, content)
     logger.info(f"🎯 Triggering voice for user {user.id}: source={source}")
 
-    result = await send_voice_to_neura(user.id, prompt)
+    # ✅ Use device_id and voice gender
+    result = await send_voice_to_neura(
+        request=request,
+        device_id=user.temp_uid,
+        text=prompt,
+        gender=user.voice
+    )
+
     logger.info(f"🎙️ Voice sent to user {user.id} | status={result.get('status')}")
 
     # 🎭 Update emotion status after sending

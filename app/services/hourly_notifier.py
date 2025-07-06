@@ -8,7 +8,6 @@ import asyncio
 from sqlalchemy.orm import Session
 from app.models.database import SessionLocal
 from app.models.user import User, TierLevel
-from app.utils.ai_engine import generate_ai_reply
 import random
 from datetime import datetime
 from app.utils.voice_sender import send_voice_to_neura
@@ -18,11 +17,10 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-def get_prompt(user):
+def get_prompt(user: User) -> str:
     now = datetime.now()
     hour = now.hour
 
-    # Determine time of day
     if 5 <= hour < 12:
         time_context = "morning"
     elif 12 <= hour < 18:
@@ -32,7 +30,6 @@ def get_prompt(user):
     else:
         time_context = "night"
 
-    # Mood-specific messages
     if user.emotion_status == "stressed":
         return "I sense things might feel a bit heavy right now. Remember, I'm always here for you."
     elif user.emotion_status == "tired":
@@ -40,46 +37,33 @@ def get_prompt(user):
     elif user.emotion_status == "happy":
         return "I love that you're feeling good today! Keep shining."
 
-    # Time-based friendly prompts
-    morning_prompts = [
-        "Good morning! Ready to make today amazing?",
-        "Hi there, hope you woke up refreshed.",
-        "Morning! I'm here if you want to plan your day."
-    ]
+    prompts = {
+        "morning": [
+            "Good morning! Ready to make today amazing?",
+            "Hi there, hope you woke up refreshed.",
+            "Morning! I'm here if you want to plan your day."
+        ],
+        "afternoon": [
+            "Hey, how's your day going so far?",
+            "I'm here if you need a break.",
+            "Hi! Just checking in to see how you're feeling."
+        ],
+        "evening": [
+            "Good evening. Want to unwind together?",
+            "Hope your day went well. Anything on your mind?",
+            "Evening check-in—I'm here to help if you need me."
+        ],
+        "night": [
+            "It's late—remember to rest well.",
+            "Hi, just making sure you're okay before bed.",
+            "Time to relax. Sweet dreams when you're ready!"
+        ]
+    }
 
-    afternoon_prompts = [
-        "Hey, how's your day going so far?",
-        "I'm here if you need a break.",
-        "Hi! Just checking in to see how you're feeling."
-    ]
-
-    evening_prompts = [
-        "Good evening. Want to unwind together?",
-        "Hope your day went well. Anything on your mind?",
-        "Evening check-in—I'm here to help if you need me."
-    ]
-
-    night_prompts = [
-        "It's late—remember to rest well.",
-        "Hi, just making sure you're okay before bed.",
-        "Time to relax. Sweet dreams when you're ready!"
-    ]
-
-    if time_context == "morning":
-        prompt = random.choice(morning_prompts)
-    elif time_context == "afternoon":
-        prompt = random.choice(afternoon_prompts)
-    elif time_context == "evening":
-        prompt = random.choice(evening_prompts)
-    else:
-        prompt = random.choice(night_prompts)
-
-    return prompt
-
+    return random.choice(prompts[time_context])
 
 async def run_hourly_notifier():
     db: Session = SessionLocal()
-
     try:
         users = db.query(User).filter(
             User.tier.in_([TierLevel.basic, TierLevel.pro]),
@@ -90,13 +74,21 @@ async def run_hourly_notifier():
         tasks = []
         for user in users:
             prompt = get_prompt(user)
-            tasks.append(send_voice_to_neura(user.id, prompt))
+            logger.info(f"🔔 Sending hourly nudge to {user.id} ({user.temp_uid})")
+            # ✅ Call new signature
+            tasks.append(
+                send_voice_to_neura(
+                    text=prompt,
+                    device_id=user.temp_uid,
+                    gender=user.voice,
+                    request=None  # No Request object in cron job
+                )
+            )
 
         await asyncio.gather(*tasks)
 
     finally:
         db.close()
-
 
 def hourly_notify_users():
     asyncio.run(run_hourly_notifier())

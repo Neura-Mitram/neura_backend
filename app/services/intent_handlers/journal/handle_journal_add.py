@@ -15,7 +15,7 @@ from app.utils.prompt_templates import journal_add_prompt
 
 async def handle_journal_add(request: Request, user: User, message: str, db: Session):
     # Ensure token-user match
-    await ensure_token_user_match(request, user.id)
+    # await ensure_token_user_match(request, user.id)
 
     # 🔍 Emotion Detection
     emotion_label = await update_emotion_status(user, message, db)

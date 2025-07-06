@@ -11,7 +11,7 @@ from fastapi import HTTPException, Request
 
 async def handle_list_goals(request: Request, user: User, message: str, db: Session):
     # Ensure token-user match
-    await ensure_token_user_match(request, user.id)
+    # await ensure_token_user_match(request, user.id)
     """
     Returns all goal entries for the user.
     """

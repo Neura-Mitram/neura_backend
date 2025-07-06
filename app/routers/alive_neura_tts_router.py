@@ -4,14 +4,17 @@
 
 
 import os
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from app.models.database import SessionLocal
 from app.utils.auth_utils import require_token
 from app.schemas.tts_schemas import GenerateTTSRequest
 from app.utils.audio_processor import synthesize_voice
 from pydantic import BaseModel
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 router = APIRouter()
 
@@ -31,40 +34,47 @@ def generate_tts_audio_once(
     db: Session = Depends(get_db),
     user_data: dict = Depends(require_token)
 ):
-    # ✅ Verify user ownership
-    if str(user_data["sub"]) != str(payload.device_id):
-        raise HTTPException(status_code=403, detail="Unauthorized")
-
-    # ✅ Generate TTS audio file
-    file_path = synthesize_voice(
-        payload.text,
-        gender=payload.voice,
-        output_folder="/data/audio/temp_audio"
-    )
-
-    # ✅ Read file content
     try:
-        with open(file_path, "rb") as f:
-            data = f.read()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read audio: {e}")
+        # ✅ Verify user ownership
+        if str(user_data["sub"]) != str(payload.device_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Unauthorized"
+            )
 
-    # ✅ Delete the file immediately
-    try:
-        os.remove(file_path)
-    except Exception as e:
-        # Not fatal, just log
-        print(f"[WARN] Could not delete audio file: {e}")
+        # ✅ Generate TTS audio file
+        file_path = synthesize_voice(
+            payload.text,
+            gender=payload.voice,
+            output_folder="/data/audio/temp_audio"
+        )
 
-    # ✅ Stream back to client
-    return StreamingResponse(
-        iter([data]),
-        media_type="audio/mpeg",
-        headers={
-            "Content-Disposition": 'inline; filename="speech.mp3"',
-            "Content-Length": str(len(data))
-        }
-    )
+        # ✅ Make sure file exists
+        if not os.path.isfile(file_path):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="TTS synthesis failed: output file not found."
+            )
+
+        # ✅ Build public URL
+        public_url = str(request.base_url) + f"audio/temp_audio/{os.path.basename(file_path)}"
+
+        # ✅ Return the URL
+        return {"audio_url": public_url}
+
+    except HTTPException:
+        # Let any HTTPException propagate cleanly
+        raise
+
+    except Exception as e:
+        # ✅ Log the full stack trace in server logs
+        logger.exception("Unexpected error generating TTS audio")
+
+        # ✅ Return a consistent 500 error
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {str(e)}"
+        )
 
 
 

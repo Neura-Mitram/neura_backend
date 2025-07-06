@@ -17,7 +17,7 @@ from app.utils.prompt_templates import checkin_add_prompt
 
 async def handle_checkin_add(request: Request, db: Session, user: User, intent_payload: dict):
     try:
-        await ensure_token_user_match(request, user.id)
+        # await ensure_token_user_match(request, user.id)
 
         mood_rating = intent_payload.get("mood_rating")
         gratitude = intent_payload.get("gratitude", "")
@@ -29,7 +29,7 @@ async def handle_checkin_add(request: Request, db: Session, user: User, intent_p
 
         # 🧠 Step 2: Generate AI insight based on tone and thoughts
 
-        prompt = checkin_add_prompt(message, emotion_label)
+        prompt = checkin_add_prompt(intent_payload, emotion_label)
 
         ai_response = get_mistral_reply(prompt)
         insight = json.loads(ai_response).get("ai_insight", "")

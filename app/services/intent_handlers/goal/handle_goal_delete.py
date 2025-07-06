@@ -15,7 +15,7 @@ from app.utils.prompt_templates import goal_delete_prompt
 
 async def handle_delete_goal(request: Request, user: User, message: str, db: Session):
     # Ensure token-user match
-    await ensure_token_user_match(request, user.id)
+    # await ensure_token_user_match(request, user.id)
     """
     Uses Mistral to extract goal_id to delete.
     """

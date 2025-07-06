@@ -16,7 +16,7 @@ from app.services.emotion_tone_updater import update_emotion_status
 
 async def handle_fallback_ai(request: Request, db: Session, user: User, intent_payload: dict):
     try:
-        await ensure_token_user_match(request, user.id)
+        # await ensure_token_user_match(request, user.id)
 
         user_query = intent_payload.get("query", "")
         if not user_query:

@@ -88,8 +88,10 @@ os.makedirs("/data/audio/temp_audio", exist_ok=True)
 os.makedirs("/data/audio/voice_chat", exist_ok=True)
 os.makedirs("/data/audio/voice_notifications", exist_ok=True)
 
-# Serve audio files from /get-audio/
-# app.mount("/get-audio", StaticFiles(directory="/data/audio"), name="audio")
+# Serve audio files for frontend
+app.mount("/audio/temp_audio", StaticFiles(directory="/data/audio/temp_audio"), name="temp_audio")
+app.mount("/audio/voice_notifications", StaticFiles(directory="/data/audio/voice_notifications"), name="voice_notifications")
+app.mount("/audio/voice_chat", StaticFiles(directory="/data/audio/voice_chat"), name="voice_chat")
 
 # Include routers
 app.include_router(voice_router.router)
