@@ -16,6 +16,14 @@ def ensure_token_user_match(token_sub: str, input_id: Union[str, int]):
         raise HTTPException(status_code=401, detail="Token/user mismatch")
 
 
+# ✅ Dependency to extract token payload
+def require_token(authorization: str = Header(...)):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid authorization format")
+    token = authorization.replace("Bearer ", "")
+    return verify_access_token(token)
+
+
 def build_chat_history(db, user_id, conversation_id=1, recent_count=5):
     """
     Builds chat history:
@@ -89,10 +97,3 @@ def get_memory_messages(
 
 
 
-
-# ✅ Dependency to extract token payload
-def require_token(authorization: str = Header(...)):
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid authorization format")
-    token = authorization.replace("Bearer ", "")
-    return verify_access_token(token)

@@ -24,7 +24,7 @@ def get_db():
         db.close()
 
 class DeviceUpdateRequest(BaseModel):
-    user_id: int
+    device_id: int
     device_type: Optional[str] = None
     os_version: Optional[str] = None
     device_token: Optional[str] = None
@@ -49,15 +49,15 @@ class DeviceUpdateRequest(BaseModel):
 
 @router.post("/update-device")
 async def update_device(
-    payload: DeviceUpdateRequest,
     request: Request,
+    payload: DeviceUpdateRequest,
     db: Session = Depends(get_db),
     user_data: dict = Depends(require_token)
 ):
-    # Validate token matches user
-    ensure_token_user_match(user_data["sub"], payload.user_id)
+    # Validate token matches user device
+    ensure_token_user_match(user_data["sub"], payload.device_id)
 
-    user = db.query(User).filter(User.id == payload.user_id).first()
+    user = db.query(User).filter(User.temp_uid == payload.device_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
