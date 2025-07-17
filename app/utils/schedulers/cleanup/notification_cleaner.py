@@ -14,7 +14,6 @@ import logging
 
 logger = logging.getLogger("cleanup")
 
-AUDIO_BASE_DIR = "/data/audio/voice_notifications"
 
 def delete_old_notification_logs():
     db: Session = SessionLocal()
@@ -36,27 +35,12 @@ def delete_old_notification_logs():
                 .all()
             )
 
-            deleted_count = 0
-
             for log in old_logs:
-                # If audio_file exists, delete it from disk
-                if log.audio_file:
-                    file_path = os.path.join(AUDIO_BASE_DIR, os.path.basename(log.audio_file))
-                    if os.path.exists(file_path):
-                        try:
-                            os.remove(file_path)
-                            logger.info(f"🗑️ Deleted audio file: {file_path}")
-                        except Exception as e:
-                            logger.error(f"⚠️ Failed to delete audio file {file_path}: {e}")
-                    else:
-                        logger.warning(f"⚠️ Audio file missing: {file_path}")
-
                 db.delete(log)
-                deleted_count += 1
 
             db.commit()
             logger.info(
-                f"🗑️ User {user.id} ({user.tier.value}) - Deleted {deleted_count} NotificationLog records older than {retention_days} days."
+                f"🗑️ User {user.id} ({user.tier.value}) - Deleted {len(old_logs)} NotificationLog records older than {retention_days} days."
             )
 
         logger.info("✅ NotificationLog cleanup completed.")

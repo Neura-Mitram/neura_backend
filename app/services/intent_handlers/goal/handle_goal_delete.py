@@ -6,11 +6,12 @@
 from sqlalchemy.orm import Session
 from app.models.goal import Goal
 from app.models.user import User
-from app.services.mistral_ai_service import get_mistral_reply
+from app.utils.ai_engine import generate_ai_reply
 from app.utils.auth_utils import ensure_token_user_match
 from fastapi import HTTPException, Request
 import json
 from app.utils.prompt_templates import goal_delete_prompt
+from app.utils.persona_prompt_wrapper import inject_persona_into_prompt
 
 
 async def handle_delete_goal(request: Request, user: User, message: str, db: Session):
@@ -22,7 +23,7 @@ async def handle_delete_goal(request: Request, user: User, message: str, db: Ses
 
     prompt = goal_delete_prompt(message)
 
-    mistral_response = get_mistral_reply(prompt)
+    mistral_response = generate_ai_reply(inject_persona_into_prompt(user, prompt, db))
 
     try:
         parsed = json.loads(mistral_response)
@@ -34,6 +35,7 @@ async def handle_delete_goal(request: Request, user: User, message: str, db: Ses
 
         db.delete(goal)
         db.commit()
+        db.refresh(goal)
 
         return {"message": f"🗑️ Goal ID {goal_id} deleted."}
 

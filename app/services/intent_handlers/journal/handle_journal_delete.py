@@ -7,11 +7,12 @@ from sqlalchemy.orm import Session
 from app.models.user import User
 from app.models.journal import JournalEntry
 from fastapi import HTTPException
-from app.services.mistral_ai_service import get_mistral_reply
+from app.utils.ai_engine import generate_ai_reply
 from app.utils.auth_utils import ensure_token_user_match
 import json
 from app.utils.prompt_templates import journal_delete_prompt
 from fastapi import Request
+from app.utils.persona_prompt_wrapper import inject_persona_into_prompt
 
 async def handle_journal_delete(request: Request, user: User, message: str, db: Session):
     # Ensure token-user match
@@ -20,7 +21,7 @@ async def handle_journal_delete(request: Request, user: User, message: str, db: 
     prompt = journal_delete_prompt(message)
 
     try:
-        parsed = json.loads(get_mistral_reply(prompt))
+        parsed = json.loads(generate_ai_reply(inject_persona_into_prompt(user, prompt, db)))
         entry_id = parsed["entry_id"]
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to extract entry ID: {e}")
@@ -31,5 +32,6 @@ async def handle_journal_delete(request: Request, user: User, message: str, db: 
 
     db.delete(entry)
     db.commit()
+    db.refresh(entry)
 
     return {"message": f"🗑️ Journal entry {entry_id} deleted successfully."}

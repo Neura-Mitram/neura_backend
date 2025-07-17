@@ -3,7 +3,7 @@
 # Licensed under the MIT License - see the LICENSE file for details.
 
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from pydantic import BaseModel, validator
 from sqlalchemy.orm import Session
 from app.models.database import SessionLocal
@@ -70,3 +70,22 @@ async def update_device(
 
     db.commit()
     return {"message": "Device context updated successfully"}
+
+
+
+@router.post("/update-device-fcm")
+def update_fcm_token(
+    token: str = Form(...),
+    device_id: str = Form(...),
+    db: Session = Depends(get_db),
+    user_data: dict = Depends(require_token)
+):
+    ensure_token_user_match(user_data["sub"], device_id)
+
+    user = db.query(User).filter(User.temp_uid == device_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.fcm_token = token
+    db.commit()
+    return {"success": True, "message": "FCM token updated"}

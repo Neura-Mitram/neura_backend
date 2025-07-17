@@ -1,3 +1,4 @@
+
 # Copyright (c) 2025 Shiladitya Mallick
 # This file is part of the Neura - Your Smart Assistant project.
 # Licensed under the MIT License - see the LICENSE file for details.
@@ -8,8 +9,8 @@ from sqlalchemy.orm import Session
 from fastapi import Request
 from app.models.user import User
 from app.utils.voice_sender import send_voice_to_neura
-
 from app.services.emotion_tone_updater import update_emotion_status
+from app.utils.ambient_guard import is_fragile_emotion, is_gps_near_unsafe_area
 
 logger = logging.getLogger(__name__)
 
@@ -30,32 +31,41 @@ async def trigger_voice_if_keyword_matched(
         source: str,
         content: str,
         db: Session) -> dict:
-    if not user.instant_alerts_enabled:
-        logger.info(f"🔕 Skipped: Instant alerts disabled for user {user.id}")
-        return {"status": "skipped", "reason": "alerts_disabled"}
+    # 🔕 Preference check
+    if not user.instant_alerts_enabled or user.preferred_delivery_mode != "voice":
+        return {"status": "skipped", "reason": "alerts or mode disabled"}
 
-    if not user.output_audio_mode or user.preferred_delivery_mode != "voice":
-        logger.info(f"🔕 Skipped: User {user.id} prefers non-voice or speaker mode not enabled")
-        return {"status": "skipped", "reason": "invalid_delivery_mode"}
+    # 🧠 Emotion suppression
+    if is_fragile_emotion(user):
+        logger.info(f"⚠️ Emotion too fragile. Skipping ping for user {user.id}")
+        return {"status": "skipped", "reason": "fragile_emotion"}
 
-    matched = is_keyword_matched(content, user.monitored_keywords or "")
-    if not matched:
-        return {"status": "skipped", "reason": "no_keyword_match"}
+    # 📍 Location check
+    if is_gps_near_unsafe_area(user, db):
+        logger.info(f"📍 Unsafe zone. Skipping ping for user {user.id}")
+        return {"status": "skipped", "reason": "unsafe_location"}
 
+    # 🔍 Keyword trigger
+    if not is_keyword_matched(content, user.monitored_keywords or ""):
+        return {"status": "skipped", "reason": "no_match"}
+
+    # ✅ Build prompt
     prompt = build_prompt(source, content)
-    logger.info(f"🎯 Triggering voice for user {user.id}: source={source}")
+    logger.info(f"🎯 Triggering voice for {user.id}: {source}")
 
-    # ✅ Use device_id and voice gender
+    # 🎙️ Send voice
     result = await send_voice_to_neura(
         request=request,
         device_id=user.temp_uid,
         text=prompt,
-        gender=user.voice
+        gender=user.voice,
+        emotion=user.emotion_status or "unknown",
+        lang=user.preferred_lang or "en"
     )
 
-    logger.info(f"🎙️ Voice sent to user {user.id} | status={result.get('status')}")
+    logger.info(f"✅ Voice sent to user {user.id} | status={result.get('status')}")
 
     # 🎭 Update emotion status after sending
-    await update_emotion_status(user, prompt, db)
+    await update_emotion_status(user, prompt, db, source="notification_voice")
 
     return {"status": "sent", "details": result}

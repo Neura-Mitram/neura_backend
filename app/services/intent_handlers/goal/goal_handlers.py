@@ -7,6 +7,7 @@ from app.models.goal import Goal
 from app.models.database import SessionLocal
 from datetime import datetime
 from app.services.goal_progress_service import update_goal_progress
+from app.utils.usage_tracker import track_usage_event
 
 def handle_goal_modify(user, goal_id, updates):
     db = SessionLocal()
@@ -25,4 +26,6 @@ def handle_goal_modify(user, goal_id, updates):
         update_goal_progress(goal, int(updates["progress_percent"]))
 
     db.commit()
+    track_usage_event(db, user, category="goal_mark_completed")
+
     return {"message": "Goal updated successfully."}

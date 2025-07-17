@@ -6,11 +6,12 @@
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.models.daily_checkin import DailyCheckin
-from app.services.mistral_ai_service import get_mistral_reply
+from app.utils.ai_engine import generate_ai_reply
 from app.utils.auth_utils import ensure_token_user_match
 from fastapi import HTTPException, Request
 import json
 from app.utils.prompt_templates import checkin_delete_prompt
+from app.utils.persona_prompt_wrapper import inject_persona_into_prompt
 
 async def handle_checkin_delete(request, user: User, message: str, db: Session):
     # await ensure_token_user_match(request, user.id)
@@ -19,7 +20,7 @@ async def handle_checkin_delete(request, user: User, message: str, db: Session):
     """
     prompt = checkin_delete_prompt(message)
 
-    mistral_response = get_mistral_reply(prompt)
+    mistral_response = generate_ai_reply(inject_persona_into_prompt(user, prompt, db))
 
     try:
         parsed = json.loads(mistral_response)

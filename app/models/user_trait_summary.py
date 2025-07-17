@@ -3,17 +3,19 @@
 # Licensed under the MIT License - see the LICENSE file for details.
 
 
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
-from sqlalchemy.orm import relationship
-from datetime import datetime
-from app.models.database import Base
 
-class GeneratedAudio(Base):
-    __tablename__ = "generated_audio"
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from app.models.database import Base
+from datetime import datetime
+
+class UserTraitSummary(Base):
+    __tablename__ = "user_trait_summaries"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
-    filename = Column(String, unique=True, nullable=False)
+    trait_type = Column(String)
+    trait_value = Column(String)
+    frequency = Column(Integer)
+    from_date = Column(DateTime)
+    to_date = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow)
-
-    user = relationship("User", back_populates="generated_audio")

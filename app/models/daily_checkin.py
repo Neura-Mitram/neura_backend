@@ -7,6 +7,7 @@ from sqlalchemy import Column, Integer, Text, Date, ForeignKey, DateTime, String
 from sqlalchemy.orm import relationship
 from app.models.database import Base
 import datetime
+from app.utils.encryption import EncryptedTypeHybrid  # 🔐
 
 class DailyCheckin(Base):
     __tablename__ = "daily_checkins"
@@ -15,13 +16,13 @@ class DailyCheckin(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     date = Column(Date, default=datetime.date.today())
     mood_rating = Column(Integer, nullable=True)
-    gratitude = Column(Text, nullable=True)
-    thoughts = Column(Text, nullable=True)
-    voice_summary = Column(Text, nullable=True)
+    # 🔐 Encrypted fields
+    gratitude = Column(EncryptedTypeHybrid, nullable=True)
+    thoughts = Column(EncryptedTypeHybrid, nullable=True)
+    voice_summary = Column(EncryptedTypeHybrid, nullable=True)
+    ai_insight = Column(EncryptedTypeHybrid, nullable=True)
 
-    emotion_label = Column(String, default="neutral")  # e.g., happy, sad, anxious, angry
-
-    ai_insight = Column(Text, nullable=True)  # ✅ Add this line to store Mistral-generated insight
+    emotion_label = Column(String, default="joy")
 
     user = relationship("User", back_populates="daily_checkins")
 

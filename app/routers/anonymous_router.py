@@ -9,9 +9,17 @@ from app.models.database import SessionLocal
 from app.models.user import User, TierLevel
 from app.utils.auth_utils import ensure_token_user_match, require_token
 
-# from app.utils.trial_utils import check_trial_expiry
 from app.utils.jwt_utils import create_access_token  # ✅ JWT added
-from pydantic import BaseModel
+from app.schemas.user_schemas import (
+    OnboardingUpdateRequest,
+    LoginRequest,
+    ProfileRequest,
+    TierUpgradeRequest,
+    TierDowngradeRequest
+)
+
+from app.utils.audio_processor import synthesize_voice
+from app.services.translation_service import translate
 
 
 router = APIRouter(prefix="/auth", tags=["Anonymous Auth"])
@@ -25,8 +33,7 @@ def get_db():
         db.close()
 
 
-class LoginRequest(BaseModel):
-    device_id: str
+
 @router.post("/anonymous-login")
 def anonymous_login(payload: LoginRequest, db: Session = Depends(get_db)):
     device_id = payload.device_id
@@ -68,10 +75,7 @@ def anonymous_login(payload: LoginRequest, db: Session = Depends(get_db)):
     }
 
 
-class OnboardingUpdateRequest(BaseModel):
-    device_id: str
-    ai_name: str
-    voice: str
+
 @router.post("/update-onboarding")
 def update_onboarding(payload: OnboardingUpdateRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
     ensure_token_user_match(user_data["sub"], payload.device_id)
@@ -80,20 +84,47 @@ def update_onboarding(payload: OnboardingUpdateRequest, db: Session = Depends(ge
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
 
-    user.ai_name = payload.ai_name
-    user.voice = payload.voice
+    # ✅ Update onboarding fields
+    if payload.ai_name:
+        user.ai_name = payload.ai_name
+    if payload.voice:
+        user.voice = payload.voice
+    if payload.preferred_lang:  # ✅ Add this block
+        user.preferred_lang = payload.preferred_lang
+
     db.commit()
+
+    # ✅ Wakeword instruction text
+    base_instruction = "Please record your wake word 3 times so Neura can activate by voice. Example : 'Hey Neura or Neura Baby' "
+    user_lang = user.preferred_lang or "en"
+
+    if user_lang != "en":
+        translated_text = translate(base_instruction, source_lang="en", target_lang=user_lang)
+    else:
+        translated_text = base_instruction
+
+    # ✅ Generate streaming voice
+    stream_url = synthesize_voice(
+        text=translated_text,
+        gender=user.voice if user.voice in ["male", "female"] else "female",
+        lang=user_lang,
+        emotion="joy",
+        return_url=True
+    )
 
     return {
         "message": "✅ Onboarding updated successfully",
         "device_id": user.temp_uid,
         "ai_name": user.ai_name,
-        "voice": user.voice
+        "voice": user.voice,
+        "preferred_lang": user.preferred_lang,
+        "next_step": "wakeword_setup",
+        "wakeword_instruction": translated_text,
+        "audio_stream_url": stream_url  # 🔊 for Flutter autoplay
     }
 
 
-class ProfileRequest(BaseModel):
-    device_id: str
+
 @router.post("/profile")
 def get_profile(payload: ProfileRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
     ensure_token_user_match(user_data["sub"], payload.device_id)
@@ -113,10 +144,7 @@ def get_profile(payload: ProfileRequest, db: Session = Depends(get_db), user_dat
     }
 
 
-class TierUpgradeRequest(BaseModel):
-    device_id: str
-    new_tier: str
-    payment_key: str
+
 @router.post("/upgrade-tier")
 def upgrade_anonymous_tier(payload: TierUpgradeRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
     ensure_token_user_match(user_data["sub"], payload.device_id)
@@ -143,9 +171,7 @@ def upgrade_anonymous_tier(payload: TierUpgradeRequest, db: Session = Depends(ge
     }
 
 
-class TierDowngradeRequest(BaseModel):
-    device_id: str
-    new_tier: str
+
 @router.post("/downgrade-tier")
 def downgrade_tier(payload: TierDowngradeRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
     ensure_token_user_match(user_data["sub"], payload.device_id)

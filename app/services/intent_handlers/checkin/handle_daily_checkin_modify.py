@@ -6,13 +6,15 @@
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.models.daily_checkin import DailyCheckin
-from app.services.mistral_ai_service import get_mistral_reply
+from app.utils.ai_engine import generate_ai_reply
 from fastapi import Request, HTTPException
 from app.utils.auth_utils import ensure_token_user_match
 from app.services.emotion_tone_updater import update_emotion_status
 import json
 from datetime import datetime
 from app.utils.prompt_templates import checkin_modify_prompt
+from app.utils.persona_prompt_wrapper import inject_persona_into_prompt
+from app.utils.usage_tracker import track_usage_event
 
 
 async def handle_checkin_modify(request: Request, user: User, message: str, db: Session):
@@ -20,13 +22,13 @@ async def handle_checkin_modify(request: Request, user: User, message: str, db: 
     # await ensure_token_user_match(request, user.id)
 
     # 🔍 Emotion Detection from message
-    emotion_label = await update_emotion_status(user, message, db)
+    emotion_label = await update_emotion_status(user, message, db, source="checkin_modify")
 
     # 🧠 Prompt Mistral to extract update fields
     prompt = checkin_modify_prompt(message, emotion_label)
 
     try:
-        parsed = json.loads(get_mistral_reply(prompt))
+        parsed = json.loads(generate_ai_reply(inject_persona_into_prompt(user, prompt, db)))
 
         # 🔍 Locate check-in by ID or date
         checkin = None
@@ -57,6 +59,7 @@ async def handle_checkin_modify(request: Request, user: User, message: str, db: 
 
         db.commit()
         db.refresh(checkin)
+        track_usage_event(db, user, category="checkin_modify")
 
         return {
             "message": f"✅ Check-in updated for {checkin.date.isoformat()}",

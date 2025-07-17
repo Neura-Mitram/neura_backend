@@ -9,8 +9,10 @@ from app.models.user import User
 from app.utils.auth_utils import ensure_token_user_match
 from app.utils.tier_logic import is_pro_user
 from app.services.emotion_tone_updater import update_emotion_status
-from app.services.mistral_ai_service import get_mistral_reply
+from app.utils.ai_engine import generate_ai_reply
 from app.utils.prompt_templates import blog_prompt
+from app.utils.persona_prompt_wrapper import inject_persona_into_prompt
+from app.utils.usage_tracker import track_usage_event
 
 async def handle_creator_blog(request: Request, user: User, message: str, db: Session):
     # ✅ Validate token
@@ -21,7 +23,7 @@ async def handle_creator_blog(request: Request, user: User, message: str, db: Se
         raise HTTPException(status_code=403, detail="🔒 This feature is only available to Pro users.")
 
     # 🔍 Detect emotion
-    emotion_label = await update_emotion_status(user, message, db)
+    emotion_label = await update_emotion_status(user, message, db, source="creator_blog")
 
     topic = message.strip()  # ✅ Fix: Extract topic from message
 
@@ -34,10 +36,11 @@ async def handle_creator_blog(request: Request, user: User, message: str, db: Se
     )
 
     try:
-        response = get_mistral_reply(prompt)
+        response = generate_ai_reply(inject_persona_into_prompt(user, prompt, db))
         # ✅ Increment usage counter
         user.monthly_creator_count += 1
         db.commit()
+        track_usage_event(db, user, category="creator_blog")
         return {
             "message": "✅ Blog draft generated.",
             "draft": response.strip(),

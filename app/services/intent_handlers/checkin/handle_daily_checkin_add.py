@@ -8,12 +8,13 @@ from app.models.user import User
 from app.models.daily_checkin import DailyCheckin
 from app.utils.auth_utils import ensure_token_user_match
 from app.services.emotion_tone_updater import update_emotion_status
-from app.services.mistral_ai_service import get_mistral_reply
+from app.utils.ai_engine import generate_ai_reply
 from fastapi import HTTPException, Request
 from datetime import datetime
 import json
 from app.utils.prompt_templates import checkin_add_prompt
-
+from app.utils.persona_prompt_wrapper import inject_persona_into_prompt
+from app.utils.usage_tracker import track_usage_event
 
 async def handle_checkin_add(request: Request, db: Session, user: User, intent_payload: dict):
     try:
@@ -25,13 +26,14 @@ async def handle_checkin_add(request: Request, db: Session, user: User, intent_p
         voice_note = intent_payload.get("voice_note", "")
 
         # 🔍 Step 1: Emotion Detection from thoughts
-        emotion_label = await update_emotion_status(user, thoughts, db)
+        emotion_label = await update_emotion_status(user, thoughts, db, source="checkin_add")
 
         # 🧠 Step 2: Generate AI insight based on tone and thoughts
 
         prompt = checkin_add_prompt(intent_payload, emotion_label)
 
-        ai_response = get_mistral_reply(prompt)
+        ai_response = generate_ai_reply(inject_persona_into_prompt(user, prompt, db))
+
         insight = json.loads(ai_response).get("ai_insight", "")
 
         # 📝 Step 3: Save check-in with emotion + optional voice + AI insight
@@ -49,6 +51,7 @@ async def handle_checkin_add(request: Request, db: Session, user: User, intent_p
         db.add(new_checkin)
         db.commit()
         db.refresh(new_checkin)
+        track_usage_event(db, user, category="checkin_add")
 
         return {
             "status": "success",

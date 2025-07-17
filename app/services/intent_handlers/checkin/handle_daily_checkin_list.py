@@ -7,16 +7,17 @@ from fastapi import Request, HTTPException
 from sqlalchemy.orm import Session
 from app.models.daily_checkin import DailyCheckin
 from app.models.user import User
-from app.utils.auth_utils import ensure_token_user_match
-from datetime import datetime
 
 async def handle_checkin_list(request: Request, db: Session, user: User, intent_payload: dict):
     try:
-        # await ensure_token_user_match(request, user.id)
+        # Optional emotion filter (e.g., "sad", "happy", etc.)
+        emotion_filter = intent_payload.get("emotion")
 
-        checkins = db.query(DailyCheckin).filter(
-            DailyCheckin.user_id == user.id
-        ).order_by(DailyCheckin.date.desc()).limit(30).all()
+        query = db.query(DailyCheckin).filter(DailyCheckin.user_id == user.id)
+        if emotion_filter:
+            query = query.filter(DailyCheckin.emotion_label == emotion_filter.lower())
+
+        checkins = query.order_by(DailyCheckin.date.desc()).limit(30).all()
 
         results = []
         for c in checkins:
@@ -32,7 +33,7 @@ async def handle_checkin_list(request: Request, db: Session, user: User, intent_
 
         return {
             "status": "success",
-            "message": "Recent check-ins with emotion labels",
+            "message": f"{'Filtered ' if emotion_filter else ''}check-ins returned",
             "data": results
         }
 

@@ -8,15 +8,16 @@ from sqlalchemy.orm import Session
 from app.models.notification import NotificationLog
 from app.models.user import User
 from app.utils.auth_utils import ensure_token_user_match
+from app.utils.usage_tracker import track_usage_event
+from app.services.translation_service import translate
 
 async def handle_notification_add(request: Request, db: Session, user: User, intent_payload: dict):
     try:
-        # Ensure token-user match
-        # await ensure_token_user_match(request, user.id)
+        # ✅ Optional: match token to user — if not already validated in route
 
         notification_type = intent_payload.get("notification_type", "generic")
 
-        # ✅ Validate notification type with a log
+        # ✅ Validate notification type with a fallback
         valid_types = ["generic", "reminder", "tip", "system"]
         if notification_type not in valid_types:
             import logging
@@ -25,6 +26,11 @@ async def handle_notification_add(request: Request, db: Session, user: User, int
             notification_type = "generic"
 
         content = intent_payload.get("content", "You have a new notification.")
+
+        # 🌐 Translate if user has a non-English language preference
+        user_lang = user.preferred_lang or "en"
+        if user_lang != "en":
+            content = translate(content, source_lang="en", target_lang=user_lang)
 
         new_notification = NotificationLog(
             user_id=user.id,
@@ -36,6 +42,7 @@ async def handle_notification_add(request: Request, db: Session, user: User, int
         db.add(new_notification)
         db.commit()
         db.refresh(new_notification)
+        track_usage_event(db, user, category="notification_add")
 
         return {
             "status": "success",

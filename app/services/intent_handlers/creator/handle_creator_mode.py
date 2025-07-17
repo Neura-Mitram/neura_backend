@@ -19,7 +19,7 @@ async def handle_creator_mode(request: Request, user: User, message: str, db: Se
         raise HTTPException(status_code=403, detail="🔒 Creator Mode is only available to Pro users.")
 
     # 🔍 Detect emotion
-    emotion_label = await update_emotion_status(user, message, db)
+    emotion_label = await update_emotion_status(user, message, db, source="creator_mode")
 
     return {
         "message": f"🎬 Creator Mode Activated. (Detected emotion: {emotion_label})",

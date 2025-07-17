@@ -6,11 +6,12 @@
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.models.habit import Habit
-from app.services.mistral_ai_service import get_mistral_reply
+from app.utils.ai_engine import generate_ai_reply
 from app.utils.auth_utils import ensure_token_user_match
 from fastapi import HTTPException, Request
 import json
 from app.utils.prompt_templates import habit_delete_prompt
+from app.utils.persona_prompt_wrapper import inject_persona_into_prompt
 
 async def handle_delete_habit(request: Request, user: User, message: str, db: Session):
     # Ensure token-user match
@@ -21,7 +22,8 @@ async def handle_delete_habit(request: Request, user: User, message: str, db: Se
     prompt = habit_delete_prompt(message)
 
     try:
-        response = get_mistral_reply(prompt)
+        response = generate_ai_reply(inject_persona_into_prompt(user, prompt, db))
+
         data = json.loads(response)
         habit = db.query(Habit).filter(Habit.id == data["habit_id"]).first()
 
@@ -30,6 +32,7 @@ async def handle_delete_habit(request: Request, user: User, message: str, db: Se
 
         db.delete(habit)
         db.commit()
+        db.refresh(habit)
 
         return {"message": "🗑️ Habit deleted successfully"}
 

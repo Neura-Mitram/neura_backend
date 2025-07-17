@@ -3,9 +3,10 @@
 # Licensed under the MIT License - see the LICENSE file for details.
 
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Enum
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Enum, Float
 from sqlalchemy.orm import relationship
 from datetime import datetime
+from typing import Optional
 from app.models.database import Base
 import enum
 
@@ -22,6 +23,10 @@ class User(Base):
     ai_name = Column(String, default="NeuraAI")
     voice = Column(String, default="male")  # Options: 'male' or 'female'
     tier = Column(Enum(TierLevel), default=TierLevel.free)
+    preferred_lang = Column(String, default="en")  # e.g., "en", "hi", "bn"
+
+    # ✅ For FCM _ Cloud Firebase Token
+    fcm_token: Optional[str] = Column(String)
 
     # ✅ Voice Nudges for sending update
     voice_nudges_enabled = Column(Boolean, default=True)
@@ -32,6 +37,7 @@ class User(Base):
 
     memory_enabled = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
 
     # ✅ Usage counters
     monthly_gpt_count = Column(Integer, default=0)        # Text usage counter
@@ -51,11 +57,25 @@ class User(Base):
     generated_audio = relationship("GeneratedAudio", back_populates="user", cascade="all, delete-orphan")
     goal_entries = relationship("Goal", back_populates="user", cascade="all, delete-orphan")
     habit_entries = relationship("Habit", back_populates="user", cascade="all, delete-orphan")
+    trait_logs = relationship("UserTraitLog", back_populates="user", cascade="all, delete-orphan")
+    usage_stats = relationship("UserUsageStat", back_populates="user", cascade="all, delete-orphan")
+    traits = relationship("UserTraits", back_populates="user", cascade="all, delete-orphan")
 
     # ✅ Personalization
     goal_focus = Column(String, default="balance")
     personality_mode = Column(String, default="default")
-    emotion_status = Column(String, default="neutral")
+    emotion_status = Column(String, default="joy")
+
+    # ✅ Smart Persona Usage Counters
+    journal_usage = Column(Integer, default=0)
+    habit_usage = Column(Integer, default=0)
+    goal_usage = Column(Integer, default=0)
+    checkin_usage = Column(Integer, default=0)
+    search_usage = Column(Integer, default=0)
+
+    # ✅ Private mode
+    is_private = Column(Boolean, default=False)
+    last_private_on = Column(DateTime, nullable=True)
 
     # ✅ Ambient Assistant
     hourly_ping_enabled = Column(Boolean, default=True)
@@ -70,6 +90,22 @@ class User(Base):
     device_token = Column(String, nullable=True)
     os_version = Column(String, default="")
     last_active_at = Column(DateTime, default=datetime.utcnow)
+
+    # ✅ User Lat,Long & SOS
+    last_lat = Column(Float, nullable=True)  # User's last known latitude
+    last_lon = Column(Float, nullable=True)  # User's last known longitude
+    safety_alert_optin = Column(Boolean, default=True)  # Whether user wants to get SOS alerts
+
+    # ✅ New ambient context fields
+    last_app_used = Column(String, nullable=True)  # e.g., "Spotify", "Gmail"
+    battery_level = Column(Integer, nullable=True)  # e.g., 85
+    network_type = Column(String, nullable=True)  # "wifi", "mobile", etc.
+    local_time_snapshot = Column(String, nullable=True)  # "HH:MM"
+    last_hourly_nudge_sent = Column(DateTime, nullable=True)
+
+    # ✅ For Travel Tip
+    last_travel_tip_sent = Column(DateTime, nullable=True)
+    active_mode = Column(String, default=None)  # e.g., 'interpreter', 'private', etc.
 
     def __repr__(self):
         return f"<User id={self.id} tier={self.tier.value} personality={self.personality_mode}>"

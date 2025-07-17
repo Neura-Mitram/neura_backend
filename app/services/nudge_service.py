@@ -3,6 +3,7 @@
 # Licensed under the MIT License - see the LICENSE file for details.
 
 import logging
+import os
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from app.models.database import SessionLocal
@@ -12,20 +13,21 @@ from app.models.habit import Habit
 from app.models.message_model import Message
 from app.models.notification import NotificationLog
 from app.utils.audio_processor import synthesize_voice
-from app.utils.tier_logic import is_voice_ping_allowed
-import os
+from app.utils.tier_logic import (
+    is_voice_ping_allowed, is_pro_user, is_trait_decay_allowed, is_in_private_mode
+)
+
+from app.services.trait_drift_detector import detect_trait_drift
+from app.services.translation_service import translate
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 # -------------------------------
-# Cron Job or Scheduler Logic
+# Task Checkers
 # -------------------------------
 
 def should_nudge(user: User):
-    """
-    Decide if we should nudge this user based on frequency and last sent timestamp.
-    """
     now = datetime.utcnow()
     if not user.nudge_last_sent:
         return True
@@ -42,9 +44,6 @@ def should_nudge(user: User):
     return True
 
 def get_overdue_goals(user: User, db: Session):
-    """
-    Return active goals past their deadline.
-    """
     return db.query(Goal).filter(
         Goal.user_id == user.id,
         Goal.status == "active",
@@ -53,9 +52,6 @@ def get_overdue_goals(user: User, db: Session):
     ).all()
 
 def get_stale_habits(user: User, db: Session):
-    """
-    Return habits not marked completed in the last 3 days.
-    """
     three_days_ago = datetime.utcnow() - timedelta(days=3)
     return db.query(Habit).filter(
         Habit.user_id == user.id,
@@ -64,25 +60,49 @@ def get_stale_habits(user: User, db: Session):
         Habit.last_completed < three_days_ago
     ).all()
 
-def decide_delivery_channel(user: User) -> str:
-    """
-    Determines which channel to use for the nudge.
-    """
+def detect_missed_habits_for_nudge(user: User, db: Session) -> bool:
+    if not is_trait_decay_allowed(user):
+        return False
+
+    now = datetime.utcnow()
+    missed_habits = []
+
+    habits = db.query(Habit).filter(
+        Habit.user_id == user.id,
+        Habit.status == "active"
+    ).all()
+
+    for habit in habits:
+        if habit.frequency == "daily":
+            threshold = now - timedelta(days=1)
+        elif habit.frequency == "weekly":
+            threshold = now - timedelta(days=7)
+        else:
+            continue
+
+        if not habit.last_completed or habit.last_completed < threshold:
+            missed_habits.append(habit)
+
+    return len(missed_habits) >= 2
+
+# -------------------------------
+# Delivery Channel Selector
+# -------------------------------
+
+def decide_delivery_channel(user: User, force_voice: bool = False) -> str:
+    if force_voice:
+        return "voice"
     if is_voice_ping_allowed(user) and user.voice_nudges_enabled and user.preferred_delivery_mode == "voice":
         return "voice"
     if user.push_notifications_enabled:
         return "local_notification"
     return "in_chat"
 
-
 # -------------------------------
-# Delivery functions
+# Text Generator
 # -------------------------------
 
 def build_nudge_text(user: User, goals, habits):
-    """
-    Assembles the friendly text to deliver.
-    """
     lines = []
     if goals:
         for g in goals:
@@ -100,91 +120,160 @@ def build_nudge_text(user: User, goals, habits):
         "Tap to review or say 'Mark as done' anytime!"
     )
 
+def generate_emotion_based_nudge(user: User) -> str:
+    emotion = user.emotion_status or "love"
+
+    fallback_nudges = {
+        "joy": "You seem upbeat today! Keep riding that wave 🌈",
+        "sadness": "Just checking in 💙 You're not alone—I'm here.",
+        "anger": "It's okay to feel off. I'm here if you want to vent.",
+        "fear": "Everything’s going to be alright. You're not alone.",
+        "love": "Sending good vibes your way 💖",
+        "surprise": "Hope the day’s unfolding well! Let me know if I can help.",
+    }
+
+    return fallback_nudges.get(emotion, "Hi! Just checking in. Hope you're doing well.")
+
 # -------------------------------
-# Nudge Type Delivery Functions
+# Delivery Functions (All Modes)
 # -------------------------------
 
-def send_voice_nudge(user: User, goals, habits, db: Session):
-    """
-    Builds voice nudge text, synthesizes audio using AWS Polly,
-    and stores a NotificationLog record.
-    """
-    text = build_nudge_text(user, goals, habits)
+def send_voice_nudge(user: User, text: str, db: Session, is_emotion: bool = False):
+    try:
+        user_lang = user.preferred_lang or "en"
+        if user_lang != "en":
+            text = translate(text, source_lang="en", target_lang=user_lang)
 
-    audio_path = synthesize_voice(
-        text,
-        gender = user.voice if user.voice in ["male", "female"] else "male",
-        output_folder="/data/audio/voice_notifications"
-    )
+        stream_url = synthesize_voice(
+            text,
+            gender=user.voice if user.voice in ["male", "female"] else "male",
+            lang=user_lang,
+            emotion=user.emotion_status or "unknown"
+        )
 
-    notification = NotificationLog(
-        user_id=user.id,
-        content=text,
-        type="voice_nudge",
-        audio_file=os.path.join("voice_notifications", os.path.basename(audio_path)),
-        created_at=datetime.utcnow()
-    )
-    db.add(notification)
-    logger.info("[VOICE NUDGE] Created for %s (%s)", user.name, audio_path)
+        notification = NotificationLog(
+            user_id=user.id,
+            notification_type="emotion_voice_nudge" if is_emotion else "voice_nudge",
+            content=f"{text} [stream: {stream_url}]",
+            delivered=False,
+            timestamp=datetime.utcnow()
+        )
 
-def store_local_notification(user: User, goals, habits, db: Session):
-    """
-    Stores a notification record for showing as a local notification in the app.
-    """
-    text = build_nudge_text(user, goals, habits)
-    notification = NotificationLog(
-        user_id=user.id,
-        content=text,
-        type="local_notification",
-        created_at=datetime.utcnow()
-    )
-    db.add(notification)
-    logger.info("[LOCAL NOTIFICATION] Stored for %s", user.name)
+        db.add(notification)
+        logger.info("[VOICE NUDGE] %s for %s", "Emotion" if is_emotion else "Goal/Habit", user.name)
 
-def store_in_chat_prompt(user, goals, habits, db: Session):
-    """
-    Stores a prompt message to show in chat when the user opens the app.
-    """
-    text = build_nudge_text(user, goals, habits)
+    except Exception as e:
+        db.rollback()
+        logger.error("⚠️ Failed to send voice nudge for %s: %s", user.name, str(e))
+
+def store_local_notification(user: User, text: str, db: Session, is_emotion: bool = False):
+    try:
+        user_lang = user.preferred_lang or "en"
+        if user_lang != "en":
+            text = translate(text, source_lang="en", target_lang=user_lang)
+
+        notification = NotificationLog(
+            user_id=user.id,
+            content=text,
+            notification_type="emotion_notification" if is_emotion else "local_notification",
+            delivered=False,
+            timestamp=datetime.utcnow()
+        )
+
+        db.add(notification)
+        logger.info("[NOTIFICATION] %s for %s", "Emotion" if is_emotion else "Goal/Habit", user.name)
+
+    except Exception as e:
+        db.rollback()
+        logger.error("⚠️ Failed to store local notification for %s: %s", user.name, str(e))
+
+def store_in_chat_prompt(user: User, text: str, db: Session, is_emotion: bool = False):
     message = Message(
         user_id=user.id,
         role="assistant",
         content=text,
         is_prompt=True,
-        metadata="in_chat"
+        metadata="emotion_nudge" if is_emotion else "in_chat"
     )
     db.add(message)
-    logger.info("[IN-CHAT PROMPT] Stored for %s", user.name)
+    logger.info("[IN-CHAT] %s for %s", "Emotion" if is_emotion else "Goal/Habit", user.name)
 
 # -------------------------------
-# Main scheduler
+# Main Scheduler
 # -------------------------------
 
 def process_nudges():
-    """Main scheduler loop to process nudges for all active users."""
     db = SessionLocal()
     try:
         users = db.query(User).filter(User.is_active == True).all()
 
         for user in users:
+            if is_in_private_mode(user):
+                logger.info(f"🔒 Skipped nudge for user {user.id} — Private Mode active.")
+                continue
             try:
                 overdue_goals = get_overdue_goals(user, db)
                 overdue_habits = get_stale_habits(user, db)
+                has_task = overdue_goals or overdue_habits or detect_missed_habits_for_nudge(user, db)
 
-                if not overdue_goals and not overdue_habits:
+                drift_summary = detect_trait_drift(user, db)
+
+                if not has_task:
+                    # ✅ First check: drift-based nudge
+                    if drift_summary:
+                        channel = decide_delivery_channel(user)
+                        if channel == "voice":
+                            send_voice_nudge(user, drift_summary, db, is_emotion=True)
+                        elif channel == "local_notification":
+                            store_local_notification(user, drift_summary, db, is_emotion=True)
+                        else:
+                            store_in_chat_prompt(user, drift_summary, db, is_emotion=True)
+
+                        user.nudge_last_sent = datetime.utcnow()
+                        user.nudge_last_type = channel
+                        db.commit()
+                        continue
+
+                    # ✅ Fallback: emotion nudge
+                    if not is_trait_decay_allowed(user):
+                        continue
+
+                    emotion_text = generate_emotion_based_nudge(user)
+                    channel = decide_delivery_channel(user)
+                    if channel == "voice":
+                        send_voice_nudge(user, emotion_text, db, is_emotion=True)
+                    elif channel == "local_notification":
+                        store_local_notification(user, emotion_text, db, is_emotion=True)
+                    else:
+                        store_in_chat_prompt(user, emotion_text, db, is_emotion=True)
+
+                    user.nudge_last_sent = datetime.utcnow()
+                    user.nudge_last_type = channel
+                    db.commit()
                     continue
 
+                # ✅ Skip if user was already nudged recently
                 if not should_nudge(user):
                     continue
 
-                channel = decide_delivery_channel(user)
+                    # ✅ Respect emotion safety filter
+                if is_pro_user(user) and user.emotion_status in ["sadness", "anger", "fear"]:
+                    logger.info("😔 Skipping nudge for user %s due to emotion: %s", user.id, user.emotion_status)
+                    continue
 
+                    # ✅ Nudge user with goal/habit reminder
+                force_voice = (user.tier.name == "free" and (datetime.utcnow() - user.created_at).days <= 7)
+                channel = decide_delivery_channel(user, force_voice=force_voice)
+
+                logger.info("📤 Nudge type: %s | User: %s", channel, user.name)
+
+                nudge_text = build_nudge_text(user, overdue_goals, overdue_habits)
                 if channel == "voice":
-                    send_voice_nudge(user, overdue_goals, overdue_habits, db)
+                    send_voice_nudge(user, nudge_text, db)
                 elif channel == "local_notification":
-                    store_local_notification(user, overdue_goals, overdue_habits, db)
+                    store_local_notification(user, nudge_text, db)
                 else:
-                    store_in_chat_prompt(user, overdue_goals, overdue_habits, db)
+                    store_in_chat_prompt(user, nudge_text, db)
 
                 user.nudge_last_sent = datetime.utcnow()
                 user.nudge_last_type = channel
@@ -192,8 +281,20 @@ def process_nudges():
 
             except Exception as e:
                 db.rollback()
-                logger.error("⚠️ Failed to process nudge for user %s: %s", user.id, str(e))
+                logger.error("⚠️ Nudge failed for user %s: %s", user.id, str(e))
 
     finally:
         db.close()
 
+# -------------------------------
+# On-Demand Intent Handler
+# -------------------------------
+
+def generate_nudge_for_user(user: User, db: Session) -> str:
+    overdue_goals = get_overdue_goals(user, db)
+    overdue_habits = get_stale_habits(user, db)
+    if not overdue_goals and not overdue_habits:
+        if detect_missed_habits_for_nudge(user, db):
+            return "You've missed a few habit reminders lately. Let’s restart that streak 💪"
+        return generate_emotion_based_nudge(user)
+    return build_nudge_text(user, overdue_goals, overdue_habits)

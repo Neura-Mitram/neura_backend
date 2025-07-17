@@ -8,7 +8,7 @@ from typing import Union
 from sqlalchemy.orm import Session  # ✅ Needed for type hinting in get_memory_messages
 from app.utils.jwt_utils import verify_access_token
 from app.models.message_model import Message  # ✅ REQUIRED: You're using Message in queries
-from app.services.mistral_ai_service import get_mistral_reply
+from app.utils.ai_engine import generate_ai_reply
 
 # ✅ Token-user matching guard
 def ensure_token_user_match(token_sub: str, input_id: Union[str, int]):
@@ -72,28 +72,7 @@ Summarize the following conversation in 3-4 sentences, capturing key points:
 
 {text}
 """
-    return get_mistral_reply(prompt).strip()
-
-
-# ✅ Get memory messages for /memory-log
-def get_memory_messages(
-    db: Session,
-    user_id: int,
-    limit: int = 10,
-    offset: int = 0,
-    conversation_id: int = 1
-):
-    msgs = (
-        db.query(Message)
-        .filter(Message.user_id == user_id)
-        .filter(Message.conversation_id == conversation_id)
-        .order_by(Message.timestamp.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
-    msgs.reverse()
-    return msgs
+    return generate_ai_reply(prompt).strip()
 
 
 

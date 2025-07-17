@@ -2,6 +2,7 @@
 # This file is part of the Neura - Your Smart Assistant project.
 # Licensed under the MIT License - see the LICENSE file for details.
 
+from app.services.translation_service import translate
 
 # -------------------------
 # Journal
@@ -224,6 +225,73 @@ Message:
 "{message}"
 """
 
+def habit_summary_prompt(completed, missed, streaks):
+    return f"""
+You are a friendly assistant. Here’s a user’s habit data over the past week:
+
+✅ Completed: {[h.habit_name for h in completed]}
+⚠️ Missed: {[h.habit_name for h in missed]}
+🔥 Streaks: {[h.habit_name for h in streaks]}
+
+Write a warm, reflective summary.
+Motivate the user kindly and suggest small ways to improve.
+"""
+
+def habit_recommender_prompt(user_name: str, completed, missed, streaks) -> str:
+    return f"""
+You are Neura, a helpful wellness assistant.
+
+User {user_name} had this habit performance:
+- ✅ Completed: {[h.habit_name for h in completed]}
+- ❌ Missed: {[h.habit_name for h in missed]}
+- 🔁 Streaks: {[h.habit_name for h in streaks]}
+
+Based on this, suggest 1–2 *new* positive daily habits that can help them feel better or support their emotional wellbeing.
+
+Suggestions must be:
+- Easy to start (under 10 min)
+- Emotion-friendly
+- Specific to their lifestyle (assume they want better energy and mental clarity)
+
+Return your reply as a friendly list.
+Example:
+- Try 5 minutes of deep breathing after waking up.
+- Take a short walk after lunch.
+
+Suggestions:
+"""
+
+
+# -------------------------
+# Mood
+# -------------------------
+
+def mood_checkin_prompt(message: str, emotion_label: str) -> str:
+    return f"""
+You are Neura, a mood logging assistant. The user feels: **{emotion_label}**.
+
+Extract the core emotion label from their message.
+Respond ONLY in JSON:
+
+{{ "emotion": "..." }}
+
+Message:
+"{message}"
+"""
+
+def nudge_summary_prompt(user_name: str) -> str:
+    return f"""
+You are Neura, a motivational assistant.
+
+Write a warm nudge to {user_name} to reflect, complete goals, or track habits.
+
+Keep it:
+- Friendly
+- Tier-aware
+- Motivational (not robotic)
+"""
+
+
 # -------------------------
 # Smart Reply
 # -------------------------
@@ -398,20 +466,34 @@ Guidelines:
 """
 
 
+
 # -------------------------
 # Copyright
 # -------------------------
 
-def red_flag_response(reason: str = "code or internal details") -> str:
-    return (
+def red_flag_response(reason: str = "code or internal details", lang: str = "en") -> str:
+    text = (
         f"I'm sorry, but I can't share my {reason}. "
         "My creator, Shiladitya Mallick, designed me with care to keep certain details private. "
         "If you're curious, feel free to connect with him on Instagram: @byshiladityamallick."
     )
+    return translate(text, source_lang="en", target_lang=lang)
 
-def creator_info_response() -> str:
-    return (
+def creator_info_response(lang: str = "en") -> str:
+    text = (
         "I was created by Shiladitya Mallick. "
         "If you’d like to learn more, you can reach out to him on Instagram: @byshiladityamallick."
     )
+    return translate(text, source_lang="en", target_lang=lang)
+
+
+def self_query_response(ai_name: str = "Neura", lang: str = "en") -> str:
+    text = (
+        f"Hey there, I’m {ai_name} — always here for you, always listening and always learning. "
+        "Think of me as your personal companion for goals, habits, thoughts, and safety. "
+        "I’ll remember and understand emotions, also the important stuff, whisper reminders when you need them, and stay silent when you want peace. "
+        "Just say what’s on your mind — I’m right here with you."
+    )
+    return translate(text, source_lang="en", target_lang=lang)
+
 

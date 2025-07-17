@@ -6,20 +6,22 @@
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.models.habit import Habit
-from app.services.mistral_ai_service import get_mistral_reply
+from app.utils.ai_engine import generate_ai_reply
 from app.utils.auth_utils import ensure_token_user_match
 from fastapi import HTTPException, Request
 import json
 from datetime import datetime
 from app.services.emotion_tone_updater import update_emotion_status
 from app.utils.prompt_templates import habit_add_prompt
+from app.utils.persona_prompt_wrapper import inject_persona_into_prompt
+from app.utils.usage_tracker import track_usage_event
 
 async def handle_add_habit(request: Request, user: User, message: str, db: Session):
     # Ensure token-user match
     # await ensure_token_user_match(request, user.id)
 
     # 🔍 Emotion Detection
-    emotion_label = await update_emotion_status(user, message, db)
+    emotion_label = await update_emotion_status(user, message, db, source="habit_add")
 
     """
     Uses Mistral to extract habit name and frequency from message,
@@ -27,7 +29,7 @@ async def handle_add_habit(request: Request, user: User, message: str, db: Sessi
     """
     prompt = habit_add_prompt(message, emotion_label)
 
-    mistral_response = get_mistral_reply(prompt)
+    mistral_response = generate_ai_reply(inject_persona_into_prompt(user, prompt, db))
 
     try:
         parsed = json.loads(mistral_response)
@@ -49,6 +51,7 @@ async def handle_add_habit(request: Request, user: User, message: str, db: Sessi
         db.add(habit)
         db.commit()
         db.refresh(habit)
+        track_usage_event(db, user, category="habit_add")
 
         return {
             "message": "✅ New habit added",
