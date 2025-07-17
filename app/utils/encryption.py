@@ -3,7 +3,7 @@
 # Licensed under the MIT License - see the LICENSE file for details.
 
 
-
+from sqlalchemy.types import TypeDecorator
 from cryptography.fernet import Fernet
 import os
 
