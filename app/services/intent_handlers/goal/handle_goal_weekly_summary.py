@@ -10,7 +10,6 @@ from app.models.user import User
 from app.models.goal import Goal
 from app.models.mood import MoodLog
 from app.utils.ai_engine import generate_ai_reply
-from app.utils.prompt_templates import goal_summary_prompt
 from app.utils.tier_logic import is_voice_ping_allowed
 from app.utils.voice_sender import store_voice_weekly_summary
 from app.utils.persona_prompt_wrapper import inject_persona_into_prompt
