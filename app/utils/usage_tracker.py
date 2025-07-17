@@ -8,7 +8,7 @@ from datetime import datetime
 from app.models.user import User
 from app.models.user_usage_stat import UserUsageStat
 
-def update_usage_stat(db: Session, user: User, usage_type: str) -> None:
+def track_usage_event(db: Session, user: User, usage_type: str) -> None:
     """
     Increment usage count for a specific usage_type (e.g., qna_summary, journal, goal).
     Creates entry if it doesn't exist.
