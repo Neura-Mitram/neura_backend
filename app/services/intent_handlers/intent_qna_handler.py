@@ -85,7 +85,7 @@ async def handle_qna_semantic_summary(request: Request, user: User, message: str
     ai_summary = f"I found results from {source_used}, but couldn’t summarize them right now."
     try:
         final_prompt = inject_persona_into_prompt(user, summary_prompt, db)
-        ai_summary = generate_ai_reply(final_prompt).strip()
+        ai_summary = (await generate_ai_reply(final_prompt)).strip()
     except Exception:
         pass  # fallback summary already defined
 

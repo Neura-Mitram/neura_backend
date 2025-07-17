@@ -17,6 +17,9 @@ def is_event_trigger_allowed(user: User) -> bool:
 def is_pro_user(user: User) -> bool:
     return user.tier == TierLevel.pro
 
+def get_user_tier(user: User) -> str:
+    return user.tier.name if hasattr(user.tier, "name") else str(user.tier)
+
 def get_monthly_limit(tier: TierLevel) -> int:
     """
     Returns the monthly AI text usage limit for each tier.

@@ -44,7 +44,7 @@ async def handle_daily_summary(request: Request, user: User, message: str, db: S
 Be insightful, gentle, and proactive."""
 
     try:
-        ai_summary = generate_ai_reply(inject_persona_into_prompt(user, summary_prompt, db))
+        ai_summary = await generate_ai_reply(inject_persona_into_prompt(user, summary_prompt, db))
 
     except Exception as e:
         ai_summary = "I couldn’t generate a smart summary this time, but you’ve done your best this week 💙"
@@ -101,9 +101,12 @@ async def handle_weekly_emotion_summary(request: Request, user: User, message: s
     End with a soft suggestion like 'Would you like a tip?' or 'Want to reflect on something?' if needed.
     """
 
-    reply = generate_ai_reply(inject_persona_into_prompt(user, prompt, db))
+    reply = await generate_ai_reply(inject_persona_into_prompt(user, prompt, db))
 
-    track_usage_event(db, user, category="summary_emotion_weekly")
+    try:
+        track_usage_event(db, user, category="summary_daily")
+    except Exception as e:
+        print(f"⚠️ Usage tracking failed: {e}")
 
     return {
         "message": reply,
