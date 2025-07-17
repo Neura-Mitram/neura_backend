@@ -15,7 +15,7 @@ from app.utils.ai_engine import generate_ai_reply
 from app.utils.intent_tracker import track_intent_usage
 from app.services.update_device_state import handle_update_device_state
 from app.services.save_message import save_user_message
-from app.utils.schedulers.morning_news_cron import is_trivia_question
+from app.utils.schedulers.cron.morning_news_cron import is_trivia_question
 
 # Red flags / emotion / fallback
 from app.services.intent_handlers.handle_fallback_ai import handle_fallback_ai
