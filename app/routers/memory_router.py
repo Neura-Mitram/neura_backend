@@ -26,6 +26,7 @@ def get_db():
 @router.get("/export")
 @limiter.limit(get_tier_limit)
 def export_user_memory(
+    request: Request,
     device_id: str = Query(..., description="The device_id assigned during anonymous login"),
     conversation_id: int = Query(1),
     db: Session = Depends(get_db),
@@ -146,6 +147,7 @@ class MarkImportantRequest(BaseModel):
 @router.post("/mark-important")
 @limiter.limit(get_tier_limit)
 def mark_important_message(
+    request: Request,
     payload: MarkImportantRequest,
     db: Session = Depends(get_db),
     user_data: dict = Depends(require_token)
