@@ -10,7 +10,7 @@ from app.utils.auth_utils import generate_ai_reply
 from app.models.mood import MoodLog
 from app.models.goal import Goal
 from app.models.journal import JournalEntry
-from app.models.habit import HabitReminder
+from app.models.habit import Habit
 from app.models.user import User
 from collections import defaultdict
 from app.utils.voice_sender import store_voice_weekly_summary  # ✅ Voice summary util added
@@ -32,7 +32,7 @@ async def handle_daily_summary(request: Request, user: User, message: str, db: S
     moods = db.query(MoodLog).filter(MoodLog.user_id == user.id, MoodLog.timestamp >= week_ago).all()
     journals = db.query(JournalEntry).filter(JournalEntry.user_id == user.id, JournalEntry.timestamp >= week_ago).all()
     goals = db.query(Goal).filter(Goal.user_id == user.id, Goal.timestamp >= week_ago).all()
-    habits = db.query(HabitReminder).filter(HabitReminder.user_id == user.id).all()
+    habits = db.query(Habit).filter(Habit.user_id == user.id).all()
 
     summary_prompt = f"""You are Neura. Generate a 7-day summary based on the user's activity:
 - Moods: {[m.mood_rating for m in moods]}
