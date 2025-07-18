@@ -46,7 +46,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from fastapi.responses import JSONResponse
 
-
+from pathlib import Path
 
 import requests
 ip = requests.get("https://api64.ipify.org").text
@@ -105,11 +105,13 @@ app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 
 
-# Ensure audio folder exists
-os.makedirs("/tmp/wake_audio", exist_ok=True)
 
-# Serve audio files for frontend
-app.mount("/wake_audio", StaticFiles(directory="/data/wake_audio"), name="wake_audio")
+BASE_DIR = Path(__file__).resolve().parent
+wake_audio_path = BASE_DIR / "data" / "wake_audio"
+os.makedirs(wake_audio_path, exist_ok=True)
+
+app.mount("/wake_audio", StaticFiles(directory=wake_audio_path), name="wake_audio")
+
 
 
 
