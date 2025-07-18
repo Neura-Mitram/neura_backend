@@ -106,11 +106,11 @@ app.add_middleware(SlowAPIMiddleware)
 
 
 
-BASE_DIR = Path(__file__).resolve().parent
-wake_audio_path = BASE_DIR / "data" / "wake_audio"
+wake_audio_path = Path("/tmp/wake_audio")
 os.makedirs(wake_audio_path, exist_ok=True)
 
 app.mount("/wake_audio", StaticFiles(directory=wake_audio_path), name="wake_audio")
+
 
 
 
