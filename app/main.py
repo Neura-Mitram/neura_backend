@@ -65,19 +65,19 @@ scheduler = BackgroundScheduler(job_defaults={"misfire_grace_time": 60})
 async def lifespan(app: FastAPI):
 
     # 🕛 Clean every day at 2 AM
-    scheduler.add_job(run_all_cleanups, "cron", hour=2, minute=0, timezone=timezone("Asia/Kolkata"))
+    scheduler.add_job(run_all_cleanups, "cron", hour=2, minute=0, timezone=IST)
 
     # 🗓️ Reset usage counters monthly on the 1st at 3 AM
-    scheduler.add_job(reset_all_usage_counters, "cron", day=1, hour=3, minute=0, timezone=timezone("Asia/Kolkata"))
+    scheduler.add_job(reset_all_usage_counters, "cron", day=1, hour=3, minute=0, timezone=IST)
 
     # 🕛 Runs every 2 hour
-    scheduler.add_job(process_nudges, trigger="cron", hour="*/2", minute=30, timezone=timezone("Asia/Kolkata"))
+    scheduler.add_job(process_nudges, trigger="cron", hour="*/2", minute=30, timezone=IST)
 
     # 🕛 Runs every 1 hour
-    scheduler.add_job(hourly_notify_users, trigger="cron", minute=0, timezone=timezone("Asia/Kolkata"))
+    scheduler.add_job(hourly_notify_users, trigger="cron", minute=0, timezone=IST)
 
     # 🕛 Runs every day at 8:00 AM for news
-    scheduler.add_job(run_morning_news_cron, "cron", hour=8, minute=0, timezone=timezone("Asia/Kolkata"))
+    scheduler.add_job(run_morning_news_cron, "cron", hour=8, minute=0, timezone=IST)
 
     # 🗓️ Runs every Sunday at 9 AM
     scheduler.add_job(weekly_trait_summaries_cron, "cron", day_of_week="sun", hour=9, minute=0, timezone="Asia/Kolkata")
