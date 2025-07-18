@@ -39,7 +39,9 @@ from app.utils.schedulers.cron.trait_compression_cron import compress_old_traits
 from app.services.nudge_service import process_nudges
 from app.services.hourly_notifier import hourly_notify_users
 
-from pytz import timezone  # ✅ use this for interval
+from pytz import timezone as pytz_timezone  # ✅ Rename to avoid collision
+IST = pytz_timezone("Asia/Kolkata")         # ✅ Create pytz-compatible timezone object
+
 
 from app.utils.rate_limit_utils import limiter
 from slowapi.errors import RateLimitExceeded
@@ -84,7 +86,7 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(compress_old_traits, "cron", day=1, hour=3, minute=0, timezone="Asia/Kolkata")
 
     # 🔁 Runs every 10 minutes to auto-resume private mode
-    scheduler.add_job(reset_expired_private_modes, trigger="interval", minutes=10)
+    scheduler.add_job(reset_expired_private_modes, trigger="interval", minutes=10, timezone=IST)
 
 
     scheduler.start()
