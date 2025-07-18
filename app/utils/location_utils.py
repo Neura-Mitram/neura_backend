@@ -10,7 +10,7 @@ from app.models.journal import JournalEntry
 from app.models.notification import NotificationLog
 from app.utils.audio_processor import synthesize_voice
 from app.services.translation_service import translate
-from app.utils.fcm_utils import send_fcm_push
+from app.utils.firebase import send_fcm_push
 
 from math import radians, cos, sin, sqrt, atan2
 from geopy.geocoders import Nominatim
