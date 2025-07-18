@@ -10,7 +10,7 @@ from app.utils.encryption import EncryptedTypeHybrid  # 🔐 Encryption wrapper
 class SOSLog(Base):
     __tablename__ = "sos_logs"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
 
     message = Column(EncryptedTypeHybrid, nullable=True)     # 🔐 Sensitive input
     emotion = Column(String, nullable=True)                   # OK as string
