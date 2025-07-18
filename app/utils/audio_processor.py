@@ -26,7 +26,10 @@ def transcribe_audio(filepath: str) -> str:
 
 # ------------------- Text-to-Speech with ElevenLabs (Streaming) -------------------
 
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY") #sk_cc5a28fc410d5becc5b4c127c8a02830ae22d230ac57ffcc
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+if not ELEVENLABS_API_KEY:
+    raise ValueError("ELEVENLABS_API_KEY not set in environment variables.")
+
 ELEVENLABS_MODEL_ID = "eleven_multilingual_v2"
 
 # Emotion → voice settings
