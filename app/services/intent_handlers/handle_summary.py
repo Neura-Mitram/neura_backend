@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from app.utils.tier_logic import get_user_tier, is_voice_ping_allowed
 from app.utils.auth_utils import generate_ai_reply
 from app.models.mood import MoodLog
-from app.models.goal import GoalEntry
+from app.models.goal import Goal
 from app.models.journal import JournalEntry
 from app.models.habit import HabitReminder
 from app.models.user import User
@@ -31,7 +31,7 @@ async def handle_daily_summary(request: Request, user: User, message: str, db: S
 
     moods = db.query(MoodLog).filter(MoodLog.user_id == user.id, MoodLog.timestamp >= week_ago).all()
     journals = db.query(JournalEntry).filter(JournalEntry.user_id == user.id, JournalEntry.timestamp >= week_ago).all()
-    goals = db.query(GoalEntry).filter(GoalEntry.user_id == user.id, GoalEntry.timestamp >= week_ago).all()
+    goals = db.query(Goal).filter(Goal.user_id == user.id, Goal.timestamp >= week_ago).all()
     habits = db.query(HabitReminder).filter(HabitReminder.user_id == user.id).all()
 
     summary_prompt = f"""You are Neura. Generate a 7-day summary based on the user's activity:
