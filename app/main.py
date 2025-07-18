@@ -106,7 +106,7 @@ app.add_middleware(SlowAPIMiddleware)
 
 
 # Ensure audio folder exists
-os.makedirs("data/wake_audio", exist_ok=True)
+os.makedirs("/tmp/wake_audio", exist_ok=True)
 
 # Serve audio files for frontend
 app.mount("/wake_audio", StaticFiles(directory="/data/wake_audio"), name="wake_audio")
