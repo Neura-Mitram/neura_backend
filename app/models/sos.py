@@ -23,7 +23,7 @@ class UnsafeAreaReport(Base):
     __tablename__ = "unsafe_area_reports"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
 
     location = Column(EncryptedTypeHybrid, nullable=True)      # 🔐 User-entered
     reason = Column(String, nullable=False)                    # e.g. "dark area" — OK to keep plain
