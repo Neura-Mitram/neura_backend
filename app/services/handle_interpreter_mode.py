@@ -6,9 +6,8 @@
 from fastapi import Request
 from sqlalchemy.orm import Session
 from app.models.user import User
-from app.services.translation_service import translate
+from app.services.translation_service import translate, detect_language
 from app.utils.audio_processor import synthesize_voice
-from app.utils.language_detector import detect_language
 import time
 
 # Persistent interpreter state per user (reset every interaction cycle)
