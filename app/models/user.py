@@ -54,7 +54,6 @@ class User(Base):
     journal_entries = relationship("JournalEntry", back_populates="user", cascade="all, delete-orphan")
     daily_checkins = relationship("DailyCheckin", back_populates="user", cascade="all, delete-orphan")
     notifications = relationship("NotificationLog", back_populates="user", cascade="all, delete-orphan")
-    generated_audio = relationship("GeneratedAudio", back_populates="user", cascade="all, delete-orphan")
     goal_entries = relationship("Goal", back_populates="user", cascade="all, delete-orphan")
     habit_entries = relationship("Habit", back_populates="user", cascade="all, delete-orphan")
     trait_logs = relationship("UserTraitLog", back_populates="user", cascade="all, delete-orphan")
@@ -105,7 +104,7 @@ class User(Base):
 
     # ✅ For Travel Tip
     last_travel_tip_sent = Column(DateTime, nullable=True)
-    active_mode = Column(String, default=None)  # e.g., 'interpreter', 'private', etc.
+    active_mode = Column(String, default=None)  # e.g., 'interpreter', etc.
 
     def __repr__(self):
         return f"<User id={self.id} tier={self.tier.value} personality={self.personality_mode}>"

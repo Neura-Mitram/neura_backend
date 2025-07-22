@@ -26,7 +26,7 @@ from app.utils.persona_prompt_wrapper import inject_persona_into_prompt
 from app.models.sos_contact import SOSContact
 from app.services.translation_service import translate
 
-router = APIRouter()
+router = APIRouter(prefix="/chat", tags=["Chat Auth"])
 ASSISTANT_NAME = "Neura"
 
 def get_db():
@@ -52,19 +52,6 @@ async def chat_with_neura(
     ensure_token_user_match(user_data["sub"], payload.device_id)
 
     user = db.query(User).filter(User.temp_uid == payload.device_id).first()
-
-    # ✅ Block if wakeword model not trained
-    wakeword_path = f"trained_models/{payload.device_id}_neura.tflite"
-    if not os.path.exists(wakeword_path):
-        return {
-            "reply": "🔒 Please complete your wakeword setup to activate Neura.",
-            "require_wakeword": True,
-            "messages_used_this_month": user.monthly_gpt_count,
-            "messages_remaining": get_monthly_limit(user.tier) - user.monthly_gpt_count,
-            "memory_enabled": user.memory_enabled,
-            "important": any(word in payload.message.lower() for word in
-                             ["remember", "goal", "habit", "remind", "dream", "mission"]),
-        }
 
     # ✅ Check if at least one SOS contact is saved
     has_sos_contact = db.query(SOSContact).filter(SOSContact.device_id == payload.device_id).first()

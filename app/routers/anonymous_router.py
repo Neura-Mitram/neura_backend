@@ -4,6 +4,7 @@
 
 
 from fastapi import APIRouter, Depends, HTTPException, Header
+from typing import Dict
 from sqlalchemy.orm import Session
 from app.models.database import SessionLocal
 from app.models.user import User, TierLevel
@@ -15,7 +16,9 @@ from app.schemas.user_schemas import (
     LoginRequest,
     ProfileRequest,
     TierUpgradeRequest,
-    TierDowngradeRequest
+    TierDowngradeRequest,
+    TranslationRequest,
+    UserLangRequest
 )
 
 from app.utils.audio_processor import synthesize_voice
@@ -118,9 +121,47 @@ def update_onboarding(payload: OnboardingUpdateRequest, db: Session = Depends(ge
         "ai_name": user.ai_name,
         "voice": user.voice,
         "preferred_lang": user.preferred_lang,
-        "next_step": "wakeword_setup",
+        "next_step": "WakeWord Setup",
         "wakeword_instruction": translated_text,
         "audio_stream_url": stream_url  # 🔊 for Flutter autoplay
+    }
+
+
+
+@router.post("/translate-ui")
+def translate_ui_texts(
+    payload: TranslationRequest,
+    db: Session = Depends(get_db),
+    user_data: dict = Depends(require_token)
+) -> Dict[str, str]:
+
+    ensure_token_user_match(user_data["sub"], payload.device_id)
+
+    user = db.query(User).filter(User.temp_uid == payload.device_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    # ✅ Save preferred language if needed
+    user.preferred_lang = payload.target_lang
+    db.commit()
+
+    # ✅ Translate each string
+    translations = {}
+    for original in payload.strings:
+        try:
+            translated = translate(
+                text=original,
+                source_lang="en",
+                target_lang=payload.target_lang
+            )
+            translations[original] = translated
+        except Exception as e:
+            translations[original] = original  # fallback
+
+    return {
+        "message": "✅ UI translations returned",
+        "preferred_lang": user.preferred_lang,
+        "translations": translations  # ✅ main payload
     }
 
 
@@ -143,6 +184,25 @@ def get_profile(payload: ProfileRequest, db: Session = Depends(get_db), user_dat
         "is_upgraded": is_upgraded
     }
 
+
+
+@router.post("/change-user-language")
+def change_user_lang(payload: UserLangRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+    ensure_token_user_match(user_data["sub"], payload.device_id)
+
+    user = db.query(User).filter(User.temp_uid == payload.device_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    # Update language
+    user.preferred_lang = payload.preferred_lang
+    db.commit()
+
+    # Return response
+    return {
+            "message": "Language updated successfully.",
+            "preferred_lang": user.preferred_lang,
+        }
 
 
 @router.post("/upgrade-tier")

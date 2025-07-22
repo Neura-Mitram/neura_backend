@@ -13,6 +13,9 @@ from app.models.database import SessionLocal
 from app.models.user import User, TierLevel
 from app.utils.jwt_utils import verify_access_token
 from app.routers.voice_router import process_voice_input
+from app.utils.tier_logic import get_monthly_limit
+from app.utils.audio_processor import synthesize_voice
+from app.services.translation_service import translate
 
 router = APIRouter()
 
@@ -22,7 +25,6 @@ def decode_token(token: str) -> dict:
     return verify_access_token(token)
 
 
-# ✅ New Real-Time Voice Input Stream
 @router.websocket("/ws/audio-stream")
 async def stream_audio_input(websocket: WebSocket):
     await websocket.accept()
@@ -35,17 +37,56 @@ async def stream_audio_input(websocket: WebSocket):
         if not token:
             await websocket.send_json({"error": "Missing auth token"})
             return
+
+        # ✅ Step 2: Token Validate
         user_data = decode_token(token)
-        user = db.query(User).filter(User.temp_uid == user_data["sub"]).first()
+        if not user_data:
+            await websocket.send_json({"error": "Invalid auth token"})
+            return
+
+        # ✅ Step 3: Device ID Validate
+        device_id = websocket.headers.get("x-device-id", "").strip()
+        user = db.query(User).filter(User.temp_uid == device_id).first()
         if not user:
             await websocket.send_json({"error": "Invalid user"})
             return
 
-        # ✅ Step 2: Optional headers
-        battery_level = int(websocket.headers.get("x-battery-level", user.battery_level or 100))
-        preferred_lang = websocket.headers.get("x-preferred-language", user.preferred_lang or "en")
+        user_lang = user.preferred_lang or "en"
+        user_gender = user.voice or "male"
+        monthly_limit = get_monthly_limit(user.tier)
+        total_usage = user.monthly_gpt_count + user.monthly_voice_count
 
-        # ✅ Step 3: Silence timeout by tier
+        # ✅ Rate limit check
+        def send_limit_warning(reply_text):
+            audio_url = synthesize_voice(
+                text=reply_text,
+                gender=user_gender,
+                emotion="sad",
+                lang=user_lang
+            )
+            return {
+                "reply": reply_text,
+                "audio_stream_url": audio_url,
+                "emotion": "sad",
+                "memory_enabled": user.memory_enabled,
+                "messages_used_this_month": user.monthly_voice_count,
+                "messages_remaining": 0,
+                "important": True
+            }
+
+        if user.tier == TierLevel.free and total_usage >= monthly_limit:
+            reply_en = f"⚠️ You've used your {monthly_limit} total messages this month."
+            reply = translate(reply_en, source_lang="en", target_lang=user_lang) if user_lang != "en" else reply_en
+            await websocket.send_json(send_limit_warning(reply))
+            return
+
+        if user.tier != TierLevel.free and user.monthly_voice_count >= monthly_limit:
+            reply_en = f"⚠️ You've used your {monthly_limit} voice messages this month."
+            reply = translate(reply_en, source_lang="en", target_lang=user_lang) if user_lang != "en" else reply_en
+            await websocket.send_json(send_limit_warning(reply))
+            return
+
+        # ✅ Tier-based silence timeout
         tier_timeout_map = {
             TierLevel.free: 1.5,
             TierLevel.basic: 1.2,
@@ -61,7 +102,6 @@ async def stream_audio_input(websocket: WebSocket):
             buffer += chunk
             now = time.time()
 
-            # If silence or enough time passed → process buffer
             if now - last_recv > silence_timeout and len(buffer) > 8000:
                 temp_file.seek(0)
                 temp_file.write(buffer)
@@ -75,8 +115,9 @@ async def stream_audio_input(websocket: WebSocket):
                     db=db,
                     request=None,
                     conversation_id=1,
-                    monthly_limit=100  # Optional: use tier-based if needed
+                    monthly_limit=monthly_limit
                 )
+
                 await websocket.send_json(response)
                 buffer = b""
 
@@ -99,7 +140,8 @@ async def stream_elevenlabs_audio(
     websocket: WebSocket,
     text: str,
     voice_id: str,
-    model_id: str = "eleven_multilingual_v2"
+    model_id: str = "eleven_multilingual_v2",
+    lang: str = "en"  # 👈 default to English
 ):
     await websocket.accept()
     ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
@@ -114,7 +156,10 @@ async def stream_elevenlabs_audio(
             async with session.ws_connect(url, headers={"xi-api-key": ELEVENLABS_API_KEY}) as eleven_ws:
                 await eleven_ws.send_str(json.dumps({
                     "text": text,
-                    "voice_settings": {"stability": 0.5, "similarity_boost": 0.75}
+                    "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
+                    "generation_config": {
+                        "language": lang  # 👈 set language here
+                    }
                 }))
                 async for msg in eleven_ws:
                     if msg.type == aiohttp.WSMsgType.BINARY:
@@ -125,3 +170,5 @@ async def stream_elevenlabs_audio(
         await websocket.send_text(f"❌ Streaming error: {str(e)}")
     finally:
         await websocket.close()
+
+

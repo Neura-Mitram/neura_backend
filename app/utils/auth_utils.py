@@ -24,7 +24,7 @@ def require_token(authorization: str = Header(...)):
     return verify_access_token(token)
 
 
-def build_chat_history(db, user_id, conversation_id=1, recent_count=5):
+def build_chat_history(db, user_id, conversation_id, recent_count):
     """
     Builds chat history:
     - Summarizes older messages

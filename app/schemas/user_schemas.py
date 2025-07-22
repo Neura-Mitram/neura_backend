@@ -4,7 +4,7 @@
 
 
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List, Dict
 
 
 class LoginRequest(BaseModel):
@@ -29,3 +29,14 @@ class TierUpgradeRequest(BaseModel):
 class TierDowngradeRequest(BaseModel):
     device_id: Optional[str]
     new_tier: Optional[str]
+
+
+class TranslationRequest(BaseModel):
+    device_id: str
+    strings: List[str]
+    target_lang: str  # e.g., "hi"
+
+
+class UserLangRequest(BaseModel):
+    device_id: Optional[str]
+    preferred_lang: Optional[str]

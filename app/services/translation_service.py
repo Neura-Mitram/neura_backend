@@ -5,6 +5,7 @@
 
 
 from transformers import pipeline
+from langdetect import detect
 import logging
 
 logger = logging.getLogger(__name__)
@@ -61,3 +62,11 @@ def translate(text: str, source_lang: str = "en", target_lang: str = "hi") -> st
     except Exception as e:
         logger.warning(f"[TranslationService] Failed to translate: {e}")
         return text  # fallback to original
+
+
+def detect_language(text: str) -> str:
+    try:
+        return detect(text)
+    except Exception as e:
+        logger.warning(f"[LanguageDetector] Failed to detect language: {e}")
+        return "en"

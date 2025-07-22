@@ -1,20 +1,15 @@
 # Copyright (c) 2025 Shiladitya Mallick
 # This file is part of the Neura - Your Smart Assistant project.
 # Licensed under the MIT License - see the LICENSE file for details.
-# Copyright (c) 2025 Shiladitya Mallick
-# This file is part of the Neura - Your Smart Assistant project.
-# Licensed under the MIT License - see the LICENSE file for details.
+
 
 from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Depends, Request
 from sqlalchemy.orm import Session
-from datetime import datetime
 from pydantic import BaseModel
-import os, uuid
 
 from app.models.database import SessionLocal
 from app.models.user import User, TierLevel
 from app.models.message_model import Message
-# from app.models.generated_audio import GeneratedAudio
 from app.utils.audio_processor import transcribe_audio, synthesize_voice, transcribe_audio_bytes
 from app.utils.auth_utils import require_token, ensure_token_user_match, build_chat_history
 from app.utils.ai_engine import generate_ai_reply
@@ -28,11 +23,11 @@ from app.services.emotion_tone_updater import update_emotion_status
 from app.services.persona_engine import run_persona_engine
 from app.utils.persona_prompt_wrapper import inject_persona_into_prompt
 from app.models.sos_contact import SOSContact
-from app.services.translation_service import translate  # ✅ NEW
+from app.services.translation_service import translate, detect_language
 from app.services.handle_interpreter_mode import handle_interpreter_mode
 from app.services.handle_ambient_mode import handle_ambient_mode
 
-router = APIRouter()
+router = APIRouter(prefix="/voice", tags=["Voice Auth"])
 ASSISTANT_NAME = "Neura"
 
 def get_db():
@@ -41,78 +36,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
-@router.post("/voice-chat-with-neura")
-@limiter.limit(get_tier_limit)
-async def voice_chat_with_neura(
-    request: Request,
-    device_id: str = Form(...),
-    conversation_id: int = Form(None),
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    user_data: dict = Depends(require_token)
-):
-    ensure_token_user_match(user_data["sub"], device_id)
-    user = db.query(User).filter(User.temp_uid == device_id).first()
-
-    # ✅ Wakeword enforcement
-    if not os.path.exists(f"trained_models/{device_id}_neura.tflite"):
-        return {
-            "reply": "🔒 Please complete your wakeword setup to activate Neura.",
-            "require_wakeword": True,
-            "audio_stream_url": None,
-            "messages_used_this_month": user.monthly_voice_count,
-            "messages_remaining": get_monthly_limit(user.tier) - user.monthly_voice_count,
-        }
-
-    # ✅ SOS contact check
-    if not db.query(SOSContact).filter(SOSContact.device_id == device_id).first():
-        return {
-            "reply": "🛡️ Please add an SOS contact to continue. This is required for your safety.",
-            "require_sos_contact": True
-        }
-
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    if file.content_type not in ["audio/wav", "audio/x-wav", "audio/mp3"]:
-        raise HTTPException(status_code=400, detail="Invalid audio format. Use WAV or MP3.")
-
-    # ✅ Rate limiting
-    monthly_limit = get_monthly_limit(user.tier)
-    total_usage = user.monthly_gpt_count + user.monthly_voice_count
-    if user.tier == TierLevel.free and total_usage >= monthly_limit:
-        return {
-            "reply": f"⚠️ You've used your {monthly_limit} messages this month.",
-            "memory_enabled": user.memory_enabled,
-            "messages_used_this_month": total_usage,
-            "messages_remaining": 0,
-            "audio_stream_url": None
-        }
-    if user.tier != TierLevel.free and user.monthly_voice_count >= monthly_limit:
-        return {
-            "reply": f"⚠️ You've used your {monthly_limit} voice messages this month.",
-            "memory_enabled": user.memory_enabled,
-            "messages_used_this_month": user.monthly_voice_count,
-            "messages_remaining": 0,
-            "audio_stream_url": None
-        }
-
-    # ✅ Transcribe in-memory audio
-    audio_bytes = await file.read()
-    transcript = transcribe_audio_bytes(audio_bytes)
-
-    if user.active_mode == "ambient":
-        return await handle_ambient_mode(user, transcript, db)
-
-    return await process_voice_input(
-        transcript=transcript,
-        user=user,
-        db=db,
-        request=request,
-        conversation_id=conversation_id or 1,
-        monthly_limit=monthly_limit
-    )
 
 
 async def process_voice_input(
@@ -125,10 +48,20 @@ async def process_voice_input(
 ) -> dict:
 
     user_lang = user.preferred_lang or "en"
-    if user_lang != "en":
-        transcript = translate(transcript, source_lang=user_lang, target_lang="en")
+    spoken_lang = detect_language(transcript)
 
-    # ✅ Speaker mode toggle
+    # 🔄 Automatically handle spoken-lang mismatch with polite response in preferred_lang
+    if user.active_mode != "interpreter" and spoken_lang != user_lang:
+        transcript = translate(transcript, source_lang=spoken_lang, target_lang="en")
+
+    # ✅ Ambient drift/SOS always on
+    await handle_ambient_mode(user, transcript, db)
+
+    # ✅ Interpreter mode
+    if user.active_mode == "interpreter":
+        return await handle_interpreter_mode(request, user, transcript, db)
+
+    # ✅ Speaker toggle
     if "say this aloud" in transcript.lower() or "switch to speaker" in transcript.lower():
         user.output_audio_mode = "speaker"
         db.commit()
@@ -145,7 +78,7 @@ async def process_voice_input(
             "audio_stream_url": synthesize_voice("Silent mode activated. I'll respond quietly.", gender=user.voice, emotion="neutral", lang=user_lang)
         }
 
-    # ✅ Handle interpreter toggle
+    # ✅ Interpreter toggle commands
     if "start interpreter" in transcript.lower():
         user.active_mode = "interpreter"
         db.commit()
@@ -168,19 +101,13 @@ async def process_voice_input(
             "messages_remaining": monthly_limit - user.monthly_voice_count
         }
 
-    # ✅ Handle interpreter mode
-    if user.active_mode == "interpreter":
-        return await handle_interpreter_mode(request, user, transcript, db)
-
-    # ✅ Normal flow: emotion, intent, etc.
+    # ✅ Emotion, intent, red flag detection
     is_important = any(word in transcript.lower() for word in ["goal", "habit", "remind", "dream", "mission"])
     emotion_label = await update_emotion_status(user, transcript, db, source="voice_chat")
     await run_persona_engine(db, user)
 
-       # ✅ Red flag detection
     red_flag = detect_red_flag(transcript)
 
-    # Internal system/code queries
     if red_flag == "code":
         reply_text = red_flag_response(reason="code or internal details", lang=user_lang)
         return {
@@ -188,15 +115,9 @@ async def process_voice_input(
             "memory_enabled": user.memory_enabled,
             "messages_used_this_month": user.monthly_voice_count,
             "messages_remaining": monthly_limit - user.monthly_voice_count,
-            "audio_stream_url": synthesize_voice(
-                text=reply_text,
-                gender=user.voice or "female",
-                emotion="unknown",
-                lang=user_lang
-            )
+            "audio_stream_url": synthesize_voice(reply_text, gender=user.voice or "female", emotion="unknown", lang=user_lang)
         }
 
-    # Creator-related queries
     if red_flag == "creator":
         reply_text = creator_info_response(lang=user_lang)
         return {
@@ -204,15 +125,9 @@ async def process_voice_input(
             "memory_enabled": user.memory_enabled,
             "messages_used_this_month": user.monthly_voice_count,
             "messages_remaining": monthly_limit - user.monthly_voice_count,
-            "audio_stream_url": synthesize_voice(
-                text=reply_text,
-                gender=user.voice or "female",
-                emotion="surprise",
-                lang=user_lang
-            )
+            "audio_stream_url": synthesize_voice(reply_text, gender=user.voice or "female", emotion="surprise", lang=user_lang)
         }
 
-    # Self-descriptive onboarding queries
     if red_flag == "self_query":
         reply_text = self_query_response(ai_name=user.ai_name or "Neura", lang=user_lang)
         return {
@@ -220,15 +135,9 @@ async def process_voice_input(
             "memory_enabled": user.memory_enabled,
             "messages_used_this_month": user.monthly_voice_count,
             "messages_remaining": monthly_limit - user.monthly_voice_count,
-            "audio_stream_url": synthesize_voice(
-                text=reply_text,
-                gender=user.voice or "female",
-                emotion="joy",
-                lang=user_lang
-            )
+            "audio_stream_url": synthesize_voice(reply_text, gender=user.voice or "female", emotion="joy", lang=user_lang)
         }
 
-    # SOS trigger phrases
     if red_flag == "sos":
         is_force = any(term in transcript.lower() for term in SEVERE_KEYWORDS)
         reply_text = "🚨 Emergency detected. Triggering SOS alert."
@@ -239,12 +148,7 @@ async def process_voice_input(
             "memory_enabled": user.memory_enabled,
             "messages_used_this_month": user.monthly_voice_count,
             "messages_remaining": monthly_limit - user.monthly_voice_count,
-            "audio_stream_url": synthesize_voice(
-                text=reply_text,
-                gender=user.voice or "female",
-                emotion="fear",
-                lang=user_lang
-            )
+            "audio_stream_url": synthesize_voice(reply_text, gender=user.voice or "female", emotion="fear", lang=user_lang)
         }
 
     # ✅ Intent detection
@@ -267,11 +171,7 @@ async def process_voice_input(
     intent = generate_ai_reply(inject_persona_into_prompt(user, intent_prompt, db)).strip().lower()
 
     if intent == "fallback":
-        if user.memory_enabled:
-            history = build_chat_history(db, user.id, conversation_id=conversation_id)
-            prompt = f"{history}User: {transcript}\n{ASSISTANT_NAME}:"
-        else:
-            prompt = f"User: {transcript}\n{ASSISTANT_NAME}:"
+        prompt = f"User: {transcript}\n{ASSISTANT_NAME}:"
 
         assistant_reply = generate_ai_reply(inject_persona_into_prompt(user, prompt, db))
 
@@ -280,23 +180,19 @@ async def process_voice_input(
 
         audio_stream_url = synthesize_voice(
             text=assistant_reply,
-            gender=user.voice if user.voice in ["male", "female"] else "male",
+            gender=user.voice or "male",
             emotion=emotion_label,
             lang=user_lang
         )
 
-        if user.memory_enabled:
-            db.add_all([
-                Message(user_id=user.id, conversation_id=conversation_id, sender="user", message=transcript, important=is_important),
-                Message(user_id=user.id, conversation_id=conversation_id, sender="assistant", message=assistant_reply, important=False)
-            ])
+        # 🔄 Track voice usage only
         user.monthly_voice_count += 1
         db.commit()
 
         return {
             "reply": assistant_reply,
             "emotion": emotion_label,
-            "memory_enabled": user.memory_enabled,
+            "memory_enabled": user.memory_enabled,  # still returned for UI display
             "messages_used_this_month": user.monthly_voice_count,
             "messages_remaining": monthly_limit - user.monthly_voice_count,
             "important": is_important,

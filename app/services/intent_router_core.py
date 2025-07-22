@@ -77,7 +77,6 @@ from app.services.intent_handlers.privatemode.handle_private_mode_status import 
 from app.services.intent_handlers.handle_summary import handle_daily_summary, handle_weekly_emotion_summary
 from app.services.intent_handlers.handle_weekly_trait_summary import handle_weekly_trait_summary
 
-from app.services.handle_interpreter_mode import handle_interpreter_mode
 
 from app.services.handle_nudge_trigger import handle_nudge_trigger
 from app.utils.persona_prompt_wrapper import inject_persona_into_prompt
@@ -251,8 +250,6 @@ async def detect_and_route_intent(
         result = handle_private_mode_toggle(request, user, payload.message, db)
     elif intent == "private_mode_status":
         result = handle_private_mode_status(request, user)
-    elif intent == "interpreter_mode":
-        result = await handle_interpreter_mode(request, user, payload.message, db)
     else:
         if is_trivia_question(payload.message):
             result = await handle_qna_semantic_summary(request, user, payload.message, db)

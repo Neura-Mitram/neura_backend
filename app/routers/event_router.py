@@ -331,30 +331,3 @@ async def handle_wakeword_trigger(
 
 
 
-# For Private Mode (DND Active)
-class PrivateModeInput(BaseModel):
-    device_id: str
-    enable: bool  # true = go private, false = turn off
-
-@router.post("/event/private-mode-toggle")
-async def toggle_private_mode(
-    payload: PrivateModeInput,
-    db: Session = Depends(get_db),
-    user_data: dict = Depends(require_token)
-):
-    ensure_token_user_match(user_data["sub"], payload.device_id)
-
-    user = db.query(User).filter(User.temp_uid == payload.device_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    user.is_private = payload.enable
-    user.last_private_on = datetime.utcnow() if payload.enable else None
-    db.commit()
-
-    logger.info(f"🔕 Private mode {'enabled' if payload.enable else 'disabled'} for {user.temp_uid}")
-    return {
-        "status": "updated",
-        "is_private": user.is_private
-    }
-

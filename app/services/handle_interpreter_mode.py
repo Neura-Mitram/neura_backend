@@ -2,11 +2,22 @@
 # This file is part of the Neura - Your Smart Assistant project.
 # Licensed under the MIT License - see the LICENSE file for details.
 
+
 from fastapi import Request
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.services.translation_service import translate
 from app.utils.audio_processor import synthesize_voice
+from app.utils.language_detector import detect_language
+import time
+
+# Persistent interpreter state per user (reset every interaction cycle)
+interpreter_speakers = {}  # {user_id: {'A': 'es', 'B': 'en', 'last': 'A', 'last_active': 123456.789}}
+
+# Session timeout in seconds
+INTERPRETER_SESSION_TIMEOUT = 300  # 5 minutes
+# Interpreter inactivity timeout (deactivates interpreter mode)
+INTERPRETER_INACTIVITY_TIMEOUT = 180  # 3 minutes
 
 async def handle_interpreter_mode(
     request: Request,
@@ -14,42 +25,57 @@ async def handle_interpreter_mode(
     transcript: str,
     db: Session
 ):
-    """
-    Translates user's spoken input and returns the translated text with audio stream.
-    Designed for real-time interpreter mode.
-    """
-    input_lang = user.preferred_lang or "en"
+    user_id = user.id
+    spoken_lang = detect_language(transcript)
+    user_gender = user.voice if user.voice in ["male", "female"] else "male"
+    emotion = user.emotion_status or "joy"
+    current_time = time.time()
 
-    # ⚙️ You can enhance this logic to detect or allow frontend override
-    output_lang = "en" if input_lang != "en" else "hi"
+    # 🧠 Init or reset if timed out
+    mapping = interpreter_speakers.get(user_id)
+    if not mapping or current_time - mapping.get("last_active", 0) > INTERPRETER_SESSION_TIMEOUT:
+        interpreter_speakers[user_id] = {'A': spoken_lang, 'B': None, 'last': 'B', 'last_active': current_time}
+    else:
+        interpreter_speakers[user_id]['last_active'] = current_time
 
-    try:
-        translated_text = translate(transcript, source_lang=input_lang, target_lang=output_lang)
+    mapping = interpreter_speakers[user_id]
 
-        voice_gender = user.voice if user.voice in ["male", "female"] else "male"
-        emotion = user.emotion_status or "unknown"
+    # 🧭 Determine speaker (A/B) by lang switch
+    current_speaker = 'A' if spoken_lang == mapping['A'] else 'B'
+    other_speaker = 'B' if current_speaker == 'A' else 'A'
 
-        audio_stream_url = synthesize_voice(
-            text=translated_text,
-            gender=voice_gender,
-            lang=output_lang,
-            emotion=emotion
-        )
+    # 📌 Save speaker B's language if unknown
+    if current_speaker == 'B' and mapping['B'] is None:
+        mapping['B'] = spoken_lang
 
-        return {
-            "intent": "interpreter_mode",
-            "original_text": transcript,
-            "translated_text": translated_text,
-            "audio_stream_url": audio_stream_url,
-            "input_lang": input_lang,
-            "output_lang": output_lang
-        }
+    # 🌍 Translate to other speaker's lang
+    target_lang = mapping[other_speaker] or ("en" if spoken_lang != "en" else "hi")
+    translated_text = translate(transcript, source_lang=spoken_lang, target_lang=target_lang)
 
-    except Exception as e:
-        return {
-            "intent": "interpreter_mode",
-            "status": "error",
-            "message": "Translation or TTS failed.",
-            "detail": str(e)
-        }
+    # 🗣 Construct voice line: Person A/B said...
+    tag = "👤 A said:" if current_speaker == 'A' else "👤 B replied:"
+    reply_text = f"{tag} {translated_text}"
 
+    audio_url = synthesize_voice(
+        text=reply_text,
+        gender=user_gender,
+        lang=target_lang,
+        emotion=emotion
+    )
+
+    # 🔄 Save last speaker
+    mapping['last'] = current_speaker
+
+    # ⏱ Deactivate interpreter mode if inactive for too long
+    if current_time - mapping.get("last_active", 0) > INTERPRETER_INACTIVITY_TIMEOUT:
+        user.active_mode = None
+        db.commit()
+
+    return {
+        "intent": "interpreter_mode",
+        "original_text": transcript,
+        "translated_text": translated_text,
+        "speaker": current_speaker,
+        "output_lang": target_lang,
+        "audio_stream_url": audio_url
+    }

@@ -7,7 +7,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-
+from pydantic import BaseModel
 from app.models.database import SessionLocal
 from app.models.user import User
 from app.utils.auth_utils import require_token, ensure_token_user_match
@@ -21,30 +21,32 @@ def get_db():
     finally:
         db.close()
 
-@router.post("/toggle-private-mode")
-def toggle_private_mode(
-    device_id: str,
+# For Private Mode (DND Active)
+class PrivateModeInput(BaseModel):
+    device_id: str
+    enable: bool  # true = go private, false = turn off
+
+@router.post("/private-mode")
+async def toggle_private_mode(
+    payload: PrivateModeInput,
     db: Session = Depends(get_db),
     user_data: dict = Depends(require_token)
 ):
-    ensure_token_user_match(user_data["sub"], device_id)
-    user = db.query(User).filter(User.temp_uid == device_id).first()
+    ensure_token_user_match(user_data["sub"], payload.device_id)
 
+    user = db.query(User).filter(User.temp_uid == payload.device_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
+        raise HTTPException(status_code=404, detail="User not found")
 
-    if user.is_private:
-        user.is_private = False
-        user.last_private_on = None
-        msg = "🔓 Private Mode deactivated."
-    else:
-        user.is_private = True
-        user.last_private_on = datetime.utcnow()
-        msg = "🔒 Private Mode activated. Neura will pause nudges and listening."
-
+    user.is_private = payload.enable
+    user.last_private_on = datetime.utcnow() if payload.enable else None
     db.commit()
-    return {"success": True, "message": msg, "is_private": user.is_private}
 
+    print(f"🔕 Private mode {'enabled' if payload.enable else 'disabled'} for {user.temp_uid}")
+    return {
+        "status": "updated",
+        "is_private": user.is_private
+    }
 
 
 @router.get("/private-mode-status")
