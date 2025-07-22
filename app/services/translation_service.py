@@ -70,3 +70,5 @@ def detect_language(text: str) -> str:
     except Exception as e:
         logger.warning(f"[LanguageDetector] Failed to detect language: {e}")
         return "en"
+
+
