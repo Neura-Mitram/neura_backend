@@ -15,7 +15,7 @@ from app.models.database import engine
 from app.models import database
 from app.models import *  # registers all models
 
-from app.routers import chat_router, anonymous_router, voice_router
+from app.routers import chat_router, anonymous_router
 from app.routers import event_router
 from app.routers import device_router
 from app.routers import profile_summary_router
@@ -118,7 +118,6 @@ app.mount("/wake_audio", StaticFiles(directory=wake_audio_path), name="wake_audi
 
 
 # Include routers
-app.include_router(voice_router.router)
 app.include_router(chat_router.router)
 app.include_router(anonymous_router.router)
 app.include_router(event_router.router)
