@@ -206,7 +206,7 @@ def store_in_chat_prompt(user: User, text: str, db: Session, is_emotion: bool = 
 def process_nudges():
     db = SessionLocal()
     try:
-        users = db.query(User).filter(User.is_active == True).all()
+        users = db.query(User).filter(User.is_verified == True).all()
 
         for user in users:
             if is_in_private_mode(user):
