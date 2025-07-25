@@ -25,7 +25,6 @@ from app.routers import safety_router
 from app.routers import wakeword_router
 from app.routers import neura_private_router
 from app.routers import stream_router
-from app.routers import notifications_router
 from app.routers import healthz_router
 
 # 🕛 Schedulers import
@@ -129,7 +128,6 @@ app.include_router(safety_router.router)
 app.include_router(wakeword_router.router)
 app.include_router(neura_private_router.router)
 app.include_router(stream_router.router)
-app.include_router(notifications_router.router)
 app.include_router(healthz_router.router)
 
 
@@ -144,7 +142,7 @@ async def rate_limit_exceeded_handler(request, exc):
 @app.get("/")
 def read_root():
     return {
-        "message": "👋 Welcome to Neura – ManoMitram",
+        "message": "👋 Welcome to Neura – Mitram",
         "description": "This API powers Neura's intelligent voice and text interactions and provides an open foundation for proactive personal assistant experiences.",
         "copyright": "© 2025 Shiladitya Mallick",
         "license": "MIT License - See LICENSE file for details."

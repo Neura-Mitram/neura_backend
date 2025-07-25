@@ -111,9 +111,9 @@ async def deliver_travel_tip(user: User, db: Session, lat: float, lon: float) ->
                 title=f"Neura Travel Tip for {city}",
                 body=tips_text_final[:120] + "..." if len(tips_text_final) > 120 else tips_text_final,
                 data={
-                    "type": "travel_tip",
-                    "city": city,
-                    "voice_stream": tips_audio_url
+                    "tips": tips_text_final,
+                    "city_name": city,
+                    "tips_audio_url": tips_audio_url
                 }
             )
         except Exception as e:

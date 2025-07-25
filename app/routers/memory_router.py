@@ -200,3 +200,33 @@ def get_memory_messages(
     msgs = query.offset(offset).limit(limit).all()
     msgs.reverse()
     return msgs
+
+
+# 🌟 Memory Toggle
+class MemoryToggleRequest(BaseModel):
+    device_id: str
+    enabled: bool
+
+@router.post("/toggle-memory")
+@limiter.limit(get_tier_limit)
+def toggle_memory(
+    request: Request,
+    payload: MemoryToggleRequest,
+    db: Session = Depends(get_db),
+    user_data: dict = Depends(require_token)
+):
+    ensure_token_user_match(user_data["sub"], payload.device_id)
+
+    user = db.query(User).filter(User.temp_uid == payload.device_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.memory_enabled = payload.enabled
+    db.commit()
+
+    return {
+        "device_id": user.temp_uid,
+        "memory_enabled": user.memory_enabled,
+        "message": f"Memory {'enabled' if payload.enabled else 'disabled'} successfully."
+    }
+

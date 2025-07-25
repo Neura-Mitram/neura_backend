@@ -13,7 +13,7 @@ from app.models.user import User
 from app.utils.auth_utils import require_token, ensure_token_user_match
 from app.utils.tier_logic import is_in_private_mode, get_private_mode_duration_minutes
 
-router = APIRouter(prefix="/neura", tags=["Private Mode"])
+router = APIRouter(prefix="/neura-pm", tags=["Private Mode"])
 def get_db():
     db = SessionLocal()
     try:

@@ -94,7 +94,8 @@ async def stream_audio_input(websocket: WebSocket):
                 "memory_enabled": user.memory_enabled,
                 "messages_used_this_month": user.monthly_voice_count,
                 "messages_remaining": 0,
-                "important": True
+                "important": True,
+                "voice_limit_reached": True
             }
 
         if user.tier == TierLevel.free and total_usage >= monthly_limit:
@@ -112,8 +113,8 @@ async def stream_audio_input(websocket: WebSocket):
         # ✅ Tier-based silence timeout
         tier_timeout_map = {
             TierLevel.free: 1.5,
-            TierLevel.basic: 1.2,
-            TierLevel.pro: 0.9
+            TierLevel.basic: 1,
+            TierLevel.pro: 0.0
         }
         silence_timeout = tier_timeout_map.get(user.tier, 1.2)
 

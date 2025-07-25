@@ -27,7 +27,7 @@ from app.services.translation_service import translate
 
 from app.utils.location_utils import deliver_travel_tip
 from app.utils.ambient_guard import is_night_time, is_fragile_emotion, is_gps_near_unsafe_area
-
+from app.utils.firebase import send_fcm_push
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -156,6 +156,21 @@ async def run_hourly_notifier():
                     emotion=user.emotion_status or "unknown",
                     lang=user_lang
                 ))
+
+                # ✅ Also push FCM fallback for Kotlin overlay
+                if user.fcm_token:
+                    try:
+                        send_fcm_push(
+                            token=user.fcm_token,
+                            data={
+                                "hourly_text": nudge_text,
+                                "hourly_lang": user_lang,
+                                "hourly_emoji": "⏰"
+                            }
+                        )
+                        logger.info(f"📲 Sent hourly FCM fallback to {user.id}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ FCM hourly push failed for user {user.id}: {e}")
 
             user.last_hourly_nudge_sent = now
 

@@ -19,6 +19,7 @@ from app.utils.tier_logic import (
 
 from app.services.trait_drift_detector import detect_trait_drift
 from app.services.translation_service import translate
+from app.utils.firebase import send_fcm_push
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -232,6 +233,13 @@ def process_nudges():
                         user.nudge_last_sent = datetime.utcnow()
                         user.nudge_last_type = channel
                         db.commit()
+                        if user.fcm_token:
+                            send_fcm_push(
+                                token=user.fcm_token,
+                                title="💡 A little something for you",
+                                body="Neura has a quick tip or reminder for you.",
+                                data={"screen": "nudge"}
+                            )
                         continue
 
                     # ✅ Fallback: emotion nudge
@@ -250,6 +258,13 @@ def process_nudges():
                     user.nudge_last_sent = datetime.utcnow()
                     user.nudge_last_type = channel
                     db.commit()
+                    if user.fcm_token:
+                        send_fcm_push(
+                            token=user.fcm_token,
+                            title="💡 A little something for you",
+                            body="Neura has a quick tip or reminder for you.",
+                            data={"screen": "nudge"}
+                        )
                     continue
 
                 # ✅ Skip if user was already nudged recently
@@ -278,6 +293,14 @@ def process_nudges():
                 user.nudge_last_sent = datetime.utcnow()
                 user.nudge_last_type = channel
                 db.commit()
+                if user.fcm_token:
+                    send_fcm_push(
+                        token=user.fcm_token,
+                        title="💡 A little something for you",
+                        body="Neura has a quick tip or reminder for you.",
+                        data={"screen": "nudge"}
+                    )
+
 
             except Exception as e:
                 db.rollback()
