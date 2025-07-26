@@ -40,8 +40,8 @@ async def handle_ambient_mode(user, transcript: str, db):
             stream_url = synthesize_voice(
                 text=nudge_text,
                 gender=user.voice or "female",
-                lang=user_lang,
-                emotion=emotion_label
+                emotion=emotion_label,
+                lang=user_lang
             )
             db.add(NotificationLog(
                 user_id=user.id,

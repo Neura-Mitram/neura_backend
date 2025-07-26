@@ -101,7 +101,7 @@ async def deliver_travel_tip(user: User, db: Session, lat: float, lon: float) ->
                                 target_lang=user_lang) if user_lang != "en" else tips_text_en
 
     voice_gender = user.voice if user.voice in ["male", "female"] else "male"
-    tips_audio_url = synthesize_voice(tips_text_final, gender=voice_gender, lang=user_lang)
+    tips_audio_url = synthesize_voice(tips_text_final, gender=voice_gender, emotion=user_emotion, lang=user_lang)
 
     # ✅ Send FCM push if available
     if user.fcm_token:

@@ -103,13 +103,10 @@ async def sos_alert(
     # 🔊 Generate voice file
     try:
         audio_url = synthesize_voice(
-            request=request,
-            device_id=device_id,
             text=final_text,
             gender=user.voice or "female",
             emotion=user.emotion_status or "unknown",
-            lang=user.preferred_lang or "en",
-            return_url=True
+            lang=user.preferred_lang or "en"
         )
     except Exception as e:
         audio_url = None
@@ -491,8 +488,7 @@ async def generate_unsafe_summary(
             text=summary_final,
             gender=user.voice or "female",
             emotion=user.emotion_status or "unknown",
-            lang=user_lang,
-            return_url=True
+            lang=user_lang
         )
     except Exception:
         audio_url = None
@@ -583,8 +579,7 @@ async def generate_community_summary(
             text=summary_final,
             gender=user.voice or "female",
             emotion=user.emotion_status or "unknown",
-            lang=user_lang,
-            return_url=True
+            lang=user_lang
         )
     except Exception:
         audio_url = None
@@ -722,8 +717,7 @@ async def get_safe_route_suggestion_with_ai(
             text=summary_translated,
             gender=user.voice or "female",
             emotion=user.emotion_status or "unknown",
-            lang=user_lang,
-            return_url=True
+            lang=user_lang
         )
 
     except Exception:

@@ -42,8 +42,8 @@ def weekly_trait_summaries_cron():
                 stream_url = synthesize_voice(
                     summary_text,
                     gender=voice_gender,
-                    lang=user_lang,
-                    emotion=emotion
+                    emotion=emotion,
+                    lang=user_lang
                 )
 
                 notification = NotificationLog(

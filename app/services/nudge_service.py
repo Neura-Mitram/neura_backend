@@ -148,8 +148,8 @@ def send_voice_nudge(user: User, text: str, db: Session, is_emotion: bool = Fals
         stream_url = synthesize_voice(
             text,
             gender=user.voice if user.voice in ["male", "female"] else "male",
-            lang=user_lang,
-            emotion=user.emotion_status or "unknown"
+            emotion=user.emotion_status or "unknown",
+            lang=user_lang
         )
 
         notification = NotificationLog(

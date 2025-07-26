@@ -58,8 +58,8 @@ async def handle_interpreter_mode(
     audio_url = synthesize_voice(
         text=reply_text,
         gender=user_gender,
-        lang=target_lang,
-        emotion=emotion
+        emotion=emotion,
+        lang=target_lang
     )
 
     # 🔄 Save last speaker

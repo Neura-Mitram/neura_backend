@@ -63,7 +63,7 @@ def store_voice_weekly_summary(user: User, summary_text: str, db: Session):
     """
     try:
         voice_gender = user.voice if user.voice in ["male", "female"] else "male"
-        stream_url = synthesize_voice(summary_text, gender=voice_gender)
+        stream_url = synthesize_voice(summary_text, gender=voice_gender, emotion=user.emotion_status, lang=user.preferred_lang)
 
         notification = NotificationLog(
             user_id=user.id,

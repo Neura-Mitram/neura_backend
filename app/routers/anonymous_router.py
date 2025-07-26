@@ -118,9 +118,8 @@ def update_onboarding(payload: OnboardingUpdateRequest, db: Session = Depends(ge
     stream_url = synthesize_voice(
         text=translated_text,
         gender=user.voice if user.voice in ["male", "female"] else "female",
-        lang=user_lang,
         emotion="joy",
-        return_url=True
+        lang=user_lang
     )
 
     return {
