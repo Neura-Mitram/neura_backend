@@ -13,7 +13,8 @@ class LoginRequest(BaseModel):
 class OnboardingUpdateRequest(BaseModel):
     ai_name: Optional[str]
     voice: Optional[str]
-    preferred_lang: Optional[str]  # ✅ Add this
+    preferred_lang: Optional[str]
+    device_id: str
 
 
 class ProfileRequest(BaseModel):

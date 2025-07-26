@@ -81,11 +81,18 @@ def anonymous_login(payload: LoginRequest, db: Session = Depends(get_db)):
 
 @router.post("/update-onboarding")
 def update_onboarding(payload: OnboardingUpdateRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
+
+    if not payload.device_id:
+        raise HTTPException(status_code=400, detail="Missing device_id")
+
     ensure_token_user_match(user_data["sub"], payload.device_id)
 
     user = db.query(User).filter(User.temp_uid == payload.device_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
+
+    if payload.voice and payload.voice not in ["male", "female"]:
+        raise HTTPException(status_code=400, detail="Invalid voice option")
 
     # ✅ Update onboarding fields
     if payload.ai_name:
