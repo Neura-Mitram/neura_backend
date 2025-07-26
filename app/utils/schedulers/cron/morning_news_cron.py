@@ -23,7 +23,7 @@ def run_morning_news_cron():
     db = SessionLocal()
 
     try:
-        users = db.query(User).filter(User.is_active == True).all()
+        users = db.query(User).filter(User.is_verified == True).all()
         for user in users:
             try:
                 # Skip Free Tier unless upgraded later

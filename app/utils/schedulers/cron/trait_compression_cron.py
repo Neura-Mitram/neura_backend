@@ -23,7 +23,7 @@ def compress_old_traits():
         now = datetime.utcnow()
         total_summaries = 0
 
-        users = db.query(User).filter(User.is_active == True).all()
+        users = db.query(User).filter(User.is_verified == True).all()
 
         for user in users:
             if not is_trait_decay_allowed(user):

@@ -21,7 +21,7 @@ def clean_old_persona_traits():
         now = datetime.utcnow()
         total_deleted = 0
 
-        users = db.query(User).filter(User.is_active == True).all()
+        users = db.query(User).filter(User.is_verified == True).all()
 
         for user in users:
             trait_logs = db.query(UserTraitLog).filter(
