@@ -82,6 +82,7 @@ def anonymous_login(payload: LoginRequest, db: Session = Depends(get_db)):
 @router.post("/update-onboarding")
 def update_onboarding(payload: OnboardingUpdateRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
 
+
     if not payload.device_id:
         raise HTTPException(status_code=400, detail="Missing device_id")
 
