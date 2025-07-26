@@ -39,7 +39,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
-    # ✅ Usage counters
+    # ✅ Usage counterss
     monthly_gpt_count = Column(Integer, default=0)        # Text usage counter
     monthly_voice_count = Column(Integer, default=0)      # Voice usage counter
     last_gpt_reset = Column(DateTime, default=datetime.utcnow)  # Last reset timestamp
