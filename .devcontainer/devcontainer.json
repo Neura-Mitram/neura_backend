@@ -1,7 +1,7 @@
 {
   "name": "neura-backend-dev",
   "dockerFile": "Dockerfile",
-  "context": ".",
+  "context": "..",
   "features": {},
   "forwardPorts": [7860],
   "customizations": {
