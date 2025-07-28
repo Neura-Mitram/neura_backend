@@ -2,13 +2,12 @@
 # This file is part of the Neura - Your Smart Assistant project.
 # Licensed under the MIT License - see the LICENSE file for details.
 
-
+import os
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
-import os
-from fastapi import HTTPException, status  # ✅ Required for proper exception handling
+from fastapi import HTTPException, status  # ✅ For raising clean auth errors
 
-# 🔐 Load secret from environment (do not a-fallback silently!)
+# 🔐 Load secret key from environment
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not SECRET_KEY:
     raise RuntimeError("JWT_SECRET_KEY environment variable is not set.")
@@ -16,20 +15,17 @@ if not SECRET_KEY:
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30  # 30 days
 
-
-# ✅ Create JWT access token
-def create_access_token(data: dict, expires_delta: timedelta = None):
+# ✅ Function to create a signed JWT token
+def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-
-# ✅ Verify and decode JWT token
-def verify_access_token(token: str):
+# ✅ Function to verify and decode a JWT token
+def verify_access_token(token: str) -> dict:
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

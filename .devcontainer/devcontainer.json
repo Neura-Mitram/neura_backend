@@ -1,0 +1,17 @@
+{
+  "name": "neura-backend-dev",
+  "dockerFile": "Dockerfile",
+  "context": "..",
+  "features": {},
+  "forwardPorts": [7860],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-toolsai.jupyter"
+      ]
+    }
+  },
+  "postCreateCommand": "pip install --no-cache-dir -r requirements.txt"
+}
