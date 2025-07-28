@@ -4,50 +4,66 @@
 
 import os
 import logging
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+import requests
 
-# Set cache paths (Hugging Face Spaces safe)
-os.environ["HF_HOME"] = "/tmp/hf_cache"
-os.environ["TRANSFORMERS_CACHE"] = "/tmp/hf_cache"
+# ---------------------------
+# ✅ Logger Setup
+# ---------------------------
 
-# Setup logger
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logging.basicConfig(level=logging.INFO)
 
-hf_token = os.getenv("HUGGINGFACE_TOKEN")
+# ---------------------------
+# ✅ Environment Variables
+# ---------------------------
 
-if not hf_token:
-    raise EnvironmentError("HUGGINGFACE_TOKEN not found in environment variables")
+if os.getenv("ENV") != "production":
+    from dotenv import load_dotenv
+    load_dotenv()
 
-try:
-    tokenizer = AutoTokenizer.from_pretrained(
-        "mistralai/Mistral-7B-Instruct-v0.2",
-        use_fast=False,
-        token=hf_token
-    )
+HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
+MODEL_ID = os.getenv("LLM_MODEL", "sshleifer/tiny-gpt2")
 
-    model = AutoModelForCausalLM.from_pretrained(
-        "mistralai/Mistral-7B-Instruct-v0.2",
-        device_map="auto",
-        torch_dtype="auto",
-        token=hf_token
-    )
+# ---------------------------
+# ✅ Hugging Face Inference API
+# ---------------------------
 
-    generator = pipeline("text-generation", model=model, tokenizer=tokenizer)
-
-except Exception as e:
-    logger.exception("❌ Failed to load Mistral model/tokenizer")
-    generator = None
+API_URL = f"https://api-inference.huggingface.co/models/{MODEL_ID}"
+HEADERS = {
+    "Authorization": f"Bearer {HF_TOKEN}",
+    "Content-Type": "application/json"
+}
 
 
 def get_mistral_reply(prompt: str) -> str:
-    """Generate a clean Mistral response from a raw prompt."""
-    if generator is None:
-        return "⚠️ AI is temporarily unavailable."
+    """Send a prompt to Hugging Face Inference API and return the generated text."""
+
+    if not HF_TOKEN:
+        logger.error("❌ Missing Hugging Face token.")
+        return "⚠️ AI token not found."
 
     try:
-        result = generator(prompt, max_new_tokens=512, do_sample=True, temperature=0.7)[0]["generated_text"]
-        return result[len(prompt):].strip() if result.startswith(prompt) else result.strip()
+        logger.info(f"🔁 Sending prompt to Hugging Face: {MODEL_ID}")
+        response = requests.post(
+            API_URL,
+            headers=HEADERS,
+            json={"inputs": prompt}
+        )
+
+        response.raise_for_status()
+        result = response.json()
+
+        if isinstance(result, list) and "generated_text" in result[0]:
+            generated = result[0]["generated_text"]
+            return generated[len(prompt):].strip() if generated.startswith(prompt) else generated.strip()
+        else:
+            logger.warning("⚠️ Unexpected response format.")
+            return "⚠️ Unexpected AI response format."
+
+    except requests.exceptions.RequestException as e:
+        logger.exception("❌ API request failed.")
+        return "⚠️ AI is currently unreachable. Please try again later."
+
     except Exception as e:
-        logger.exception("Mistral generation failed")
-        return "⚠️ AI couldn't process the request right now. Please try again later."
+        logger.exception("❌ Unexpected error in AI response.")
+        return "⚠️ AI couldn't process your request."

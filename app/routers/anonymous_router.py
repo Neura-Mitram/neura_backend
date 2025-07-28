@@ -10,7 +10,7 @@ from app.models.database import SessionLocal
 from app.models.user import User, TierLevel
 from app.utils.auth_utils import ensure_token_user_match, require_token
 
-from app.utils.jwt_utils import create_access_token  # ✅ JWT added
+from app.utils.jwt_utils import create_access_token  #✅ JWT added
 from app.schemas.user_schemas import (
     OnboardingUpdateRequest,
     LoginRequest,
