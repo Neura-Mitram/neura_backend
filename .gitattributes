@@ -48,3 +48,4 @@ CONTRIBUTING.md    merge=ours
 .idea/             merge=ours
 .venv/             merge=ours
 .envrc             merge=ours
+
