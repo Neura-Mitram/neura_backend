@@ -30,10 +30,10 @@ RUN pip install --upgrade pip && \
 COPY . /code/
 
 # Default CMD for Hugging Face or local
-CMD ["python", "reset_db.py", "&&", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
+# CMD ["python", "reset_db.py", "&&", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
 
 # Run app
-#CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
 #------------------------------------------------------------------------------------------
 
 
