@@ -1,0 +1,27 @@
+name: Deploy to Hugging Face
+
+on:
+  push:
+    branches:
+      - main  # Only deploys when main branch is updated
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Push to Hugging Face
+        run: |
+          git config --global user.email "info.shiladityamallick@gmail.com"
+          git config --global user.name "By Shiladitya Mallick"
+
+          git clone https://huggingface.co/spaces/byshiladityamallick/neura-smart-assistant space
+          rsync -av --exclude='.git' ./ space/
+
+          cd space
+          git add .
+          git commit -m "Deploy from GitHub Action"
+          git push https://byshiladityamallick:\${{ secrets.HF_TOKEN }}@huggingface.co/spaces/byshiladityamallick/neura-smart-assistant main
