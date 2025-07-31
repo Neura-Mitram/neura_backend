@@ -24,4 +24,4 @@ jobs:
           cd space
           git add .
           git commit -m "Deploy from GitHub Action"
-          git push https://byshiladityamallick:\${{ secrets.HF_TOKEN }}@huggingface.co/spaces/byshiladityamallick/neura-smart-assistant main
+          git push https://byshiladityamallick:\${{ secrets.HF_TOKEN_WRITE }}@huggingface.co/spaces/byshiladityamallick/neura-smart-assistant main
