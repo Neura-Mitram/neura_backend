@@ -49,3 +49,6 @@ CONTRIBUTING.md    merge=ours
 .venv/             merge=ours
 .envrc             merge=ours
 
+.gitignore merge=ours
+.gitattributes merge=ours
+firebase_admin.json merge=ours
