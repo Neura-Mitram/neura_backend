@@ -3,7 +3,7 @@
 # Licensed under the MIT License - see the LICENSE file for details.
 
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Form
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Form
 from pydantic import BaseModel, validator
 from sqlalchemy.orm import Session
 from app.models.database import SessionLocal
@@ -25,11 +25,12 @@ def get_db():
 
 class DeviceUpdateRequest(BaseModel):
     device_id: str
-    device_type: Optional[str] = None
-    os_version: Optional[str] = None
-    device_token: Optional[str] = None
-    output_audio_mode: Optional[str] = None
-    preferred_delivery_mode: Optional[str] = None
+    device_type: Optional[str]
+    os_version: Optional[str]
+    device_token: Optional[str]
+    output_audio_mode: Optional[str]
+    preferred_delivery_mode: Optional[str]
+    device_token: Optional[str]
 
     @validator('device_type', pre=True, always=True)
     def default_device_type(cls, v):
@@ -47,34 +48,43 @@ class DeviceUpdateRequest(BaseModel):
     def default_delivery_mode(cls, v):
         return v.strip() if v and v.strip() else "text"
 
-@router.post("/update-device")
-async def update_device(
+
+@router.post("/update-device-context")
+async def update_device_context(
     request: Request,
-    payload: DeviceUpdateRequest,
+    payload: DeviceUpdateRequest = Body(...),
+    fcm_token: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     user_data: dict = Depends(require_token)
 ):
-    # Validate token matches user device
     ensure_token_user_match(user_data["sub"], payload.device_id)
 
     user = db.query(User).filter(User.temp_uid == payload.device_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    user.device_type = payload.device_type
-    user.os_version = payload.os_version
-    user.output_audio_mode = payload.output_audio_mode
-    user.preferred_delivery_mode = payload.preferred_delivery_mode
-    user.device_token = payload.device_token
-    user.last_active_at = datetime.utcnow()
+    try:
+        user.device_type = payload.device_type
+        user.os_version = payload.os_version
+        user.output_audio_mode = payload.output_audio_mode
+        user.preferred_delivery_mode = payload.preferred_delivery_mode
+        user.device_token = payload.device_token
+        user.last_active_at = datetime.utcnow()
 
-    db.commit()
-    return {"message": "Device context updated successfully"}
+        # Update FCM token if provided
+        if fcm_token:
+            user.fcm_token = fcm_token
+
+        db.commit()
+        return {"success": True, "message": "Device + FCM updated successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 
-@router.post("/update-device-fcm")
-def update_fcm_token(
+@router.post("/retry-device-fcm")
+def retry_fcm_token(
     token: str = Form(...),
     device_id: str = Form(...),
     db: Session = Depends(get_db),

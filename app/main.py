@@ -8,6 +8,8 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from fastapi.middleware.cors import CORSMiddleware
+
 
 import os
 
@@ -112,8 +114,13 @@ os.makedirs(wake_audio_path, exist_ok=True)
 
 app.mount("/wake_audio", StaticFiles(directory=wake_audio_path), name="wake_audio")
 
-
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Use ["http://localhost:3000"] in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # Include routers
