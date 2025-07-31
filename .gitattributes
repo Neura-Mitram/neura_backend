@@ -51,4 +51,4 @@ CONTRIBUTING.md    merge=ours
 
 .gitignore merge=ours
 .gitattributes merge=ours
-firebase_admin.json merge=ours
+
