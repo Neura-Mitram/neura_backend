@@ -1,0 +1,24 @@
+name: Deploy to Hugging Face Space
+
+on:
+  push:
+    branches:
+      - main  # ONLY trigger when main is updated
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
+
+    - name: Push to Hugging Face Space
+      run: |
+        git config --global user.email "your@email.com"
+        git config --global user.name "Your Name"
+
+        git remote add hf https://user:$HF_TOKEN@huggingface.co/spaces/byshiladityamallick/neura-smart-assistant
+        git push hf main --force
+      env:
+        HF_TOKEN: ${{ secrets.HF_TOKEN }}
