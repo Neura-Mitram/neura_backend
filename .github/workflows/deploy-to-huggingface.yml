@@ -3,7 +3,7 @@ name: Deploy to Hugging Face
 on:
   push:
     branches:
-      - main  # ✅ Only deploy when main branch is updated
+      - main  # ✅ Trigger only on updates to main branch
 
 jobs:
   deploy:
@@ -19,10 +19,10 @@ jobs:
           git config --global user.email "info.shiladityamallick@gmail.com"
           git config --global user.name "By Shiladitya Mallick"
 
-          # Clone Hugging Face Space into ./space directory
+          # 🧠 Clone the existing Hugging Face Space repo
           git clone https://huggingface.co/spaces/byshiladityamallick/neura-smart-assistant space
 
-          # Copy all project files into the cloned repo, excluding .git, and delete anything extra
+          # ✅ Copy this GitHub repo INTO the HF space root (no nesting)
           rsync -av --exclude='.git' --delete ./ space || [[ $? == 24 ]]
 
           # Commit and push to HF Space
