@@ -3,37 +3,39 @@ name: Deploy to Hugging Face
 on:
   push:
     branches:
-      - main  # ✅ Only deploy on main branch changes
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 📥 Checkout code
+      - name: 📥 Checkout repo
         uses: actions/checkout@v4
 
-      - name: 🚀 Push to Hugging Face
+      - name: 🧽 Clone and Clean HF Space
         run: |
-          # 🧠 Set Git identity
+          # Git identity
           git config --global user.email "info.shiladityamallick@gmail.com"
           git config --global user.name "By Shiladitya Mallick"
 
-          # 🧽 Clone HF Space cleanly
-          git clone https://huggingface.co/spaces/byshiladityamallick/neura-smart-assistant space
-          cd space
-          git reset --hard origin/main
+          # Clone HF Space
+          git clone https://huggingface.co/spaces/byshiladityamallick/neura-smart-assistant hf_space
+
+          # Clean out old files
+          cd hf_space
+          git rm -rf . > /dev/null 2>&1 || true
           git clean -fdx
           cd ..
 
-          # 📦 Copy this repo into HF space repo (excluding itself)
-          rsync -av --exclude='.git' --exclude='space' ./ space || [[ $? == 24 ]]
+          # Copy only what we want (not .git or space/)
+          rsync -av --exclude='.git' --exclude='hf_space' ./ hf_space/
 
-          # 🕒 Touch a timestamp file to force commit
-          date > space/.last_deployed_at.txt
+          # Force redeploy with timestamp
+          date > hf_space/.last_deployed_at.txt
 
-          # ✅ Commit & push to HF
-          cd space
+          # Commit and push
+          cd hf_space
           git add .
-          git commit -m "🚀 Deploy from GitHub Action at $(date)" || echo "Nothing to commit"
+          git commit -m "🔥 Force deploy $(date)" || echo "Nothing to commit"
           git push -f https://byshiladityamallick:${{ secrets.HF_TOKEN_WRITE }}@huggingface.co/spaces/byshiladityamallick/neura-smart-assistant main
