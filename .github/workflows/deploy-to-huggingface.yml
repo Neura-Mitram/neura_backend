@@ -26,5 +26,10 @@ jobs:
 
           cd space
           git add .
+<<<<<<< HEAD
           git commit -m "Deploy from GitHub Action" || echo "Nothing to commit"
           git push https://byshiladityamallick:${{ secrets.HF_TOKEN_WRITE }}@huggingface.co/spaces/byshiladityamallick/neura-smart-assistant main
+=======
+          git commit -m "Deploy from GitHub Action"
+          git push https://byshiladityamallick:\${{ secrets.HF_TOKEN_WRITE }}@huggingface.co/spaces/byshiladityamallick/neura-smart-assistant main
+>>>>>>> a48a1c0bd576f81b61bb35bfe5c89e55af7b62c3
