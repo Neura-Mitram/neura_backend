@@ -3,7 +3,7 @@ name: Deploy to Hugging Face
 on:
   push:
     branches:
-      - main  # ✅ Only deploy when main branch is updated
+      - main  # ✅ Only deploy on main branch changes
 
 jobs:
   deploy:
@@ -15,25 +15,25 @@ jobs:
 
       - name: 🚀 Push to Hugging Face
         run: |
-          # Configure Git identity
+          # 🧠 Set Git identity
           git config --global user.email "info.shiladityamallick@gmail.com"
           git config --global user.name "By Shiladitya Mallick"
 
-          # Clone Hugging Face Space into ./space directory
+          # 🧽 Clone HF Space cleanly
           git clone https://huggingface.co/spaces/byshiladityamallick/neura-smart-assistant space
-
-          # 🔥 FORCE RESET the repo to prevent nesting or leftover junk
           cd space
-          git fetch origin
           git reset --hard origin/main
           git clean -fdx
           cd ..
 
-          # ✅ Copy code into space (excluding .git and space/ itself)
-          rsync -av --exclude='.git' --exclude='space' --delete ./ space || [[ $? == 24 ]]
+          # 📦 Copy this repo into HF space repo (excluding itself)
+          rsync -av --exclude='.git' --exclude='space' ./ space || [[ $? == 24 ]]
 
-          # 📤 Commit and push to Hugging Face
+          # 🕒 Touch a timestamp file to force commit
+          date > space/.last_deployed_at.txt
+
+          # ✅ Commit & push to HF
           cd space
           git add .
-          git commit -m "Deploy from GitHub Action" || echo "Nothing to commit"
+          git commit -m "🚀 Deploy from GitHub Action at $(date)" || echo "Nothing to commit"
           git push -f https://byshiladityamallick:${{ secrets.HF_TOKEN_WRITE }}@huggingface.co/spaces/byshiladityamallick/neura-smart-assistant main
