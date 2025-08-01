@@ -22,11 +22,18 @@ jobs:
           # Clone Hugging Face Space into ./space directory
           git clone https://huggingface.co/spaces/byshiladityamallick/neura-smart-assistant space
 
-          # Copy all project files into the cloned repo, excluding .git, and delete anything extra
-          rsync -av --exclude='.git' --delete ./ space || [[ $? == 24 ]]
+          # 🔥 FORCE RESET the repo to prevent nesting or leftover junk
+          cd space
+          git fetch origin
+          git reset --hard origin/main
+          git clean -fdx
+          cd ..
 
-          # Commit and push to HF Space
+          # ✅ Copy code into space (excluding .git and space/ itself)
+          rsync -av --exclude='.git' --exclude='space' --delete ./ space || [[ $? == 24 ]]
+
+          # 📤 Commit and push to Hugging Face
           cd space
           git add .
           git commit -m "Deploy from GitHub Action" || echo "Nothing to commit"
-          git push https://byshiladityamallick:${{ secrets.HF_TOKEN_WRITE }}@huggingface.co/spaces/byshiladityamallick/neura-smart-assistant main
+          git push -f https://byshiladityamallick:${{ secrets.HF_TOKEN_WRITE }}@huggingface.co/spaces/byshiladityamallick/neura-smart-assistant main
