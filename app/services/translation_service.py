@@ -14,16 +14,7 @@ if os.getenv("ENV") != "production":
     from dotenv import load_dotenv
     load_dotenv()
 
-HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
-TRANSLATION_MODEL = "facebook/nllb-200-distilled-600M"
-
-API_URL = f"https://api-inference.huggingface.co/models/{TRANSLATION_MODEL}"
-HEADERS = {
-    "Authorization": f"Bearer {HF_TOKEN}",
-    "Content-Type": "application/json"
-}
-
-# ✅ Language code mapping
+# ✅ Language code mapping for NLLB
 LANG_MAP = {
     "ar": "ara_Arab", "bg": "bul_Cyrl", "zh": "cmn_Hans", "hr": "hrv_Latn",
     "cs": "ces_Latn", "da": "dan_Latn", "nl": "nld_Latn", "en": "eng_Latn",
@@ -35,30 +26,24 @@ LANG_MAP = {
     "uk": "ukr_Cyrl", "hu": "hun_Latn", "no": "nor_Latn", "vi": "vie_Latn",
 }
 
+# ✅ API for hosted NLLB Space (no token needed)
+API_URL = "https://winstxnhdw-nllb-api.hf.space/api/v4/translator"
 
 def translate(text: str, source_lang: str = "en", target_lang: str = "hi") -> str:
-    """Translate text from source to target using Hugging Face Inference API."""
+    """Translate text using public Hugging Face NLLB API."""
     try:
         src = LANG_MAP.get(source_lang, "eng_Latn")
         tgt = LANG_MAP.get(target_lang, "hin_Deva")
 
-        payload = {
-            "inputs": text,
-            "parameters": {
-                "src_lang": src,
-                "tgt_lang": tgt
-            }
-        }
-
-        response = requests.post(API_URL, headers=HEADERS, json=payload)
+        response = requests.get(
+            API_URL,
+            params={"text": text, "source": src, "target": tgt},
+            timeout=30,
+        )
         response.raise_for_status()
         result = response.json()
 
-        if isinstance(result, list) and "translation_text" in result[0]:
-            return result[0]["translation_text"]
-        else:
-            logger.warning("[TranslationService] Unexpected response format.")
-            return text
+        return result.get("translation_text", text)
 
     except Exception as e:
         logger.warning(f"[TranslationService] Failed to translate: {e}")
