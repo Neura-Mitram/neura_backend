@@ -189,10 +189,17 @@ async def translate_ui_texts(
     # ✅ Translate only missing strings
     missing_texts = [txt for txt in payload.strings if txt not in lang_cache]
     if missing_texts:
-        translated_texts = await asyncio.gather(*[
-            translate(text=txt, source_lang="en", target_lang=payload.target_lang)
-            for txt in missing_texts
-        ])
+
+        translated_texts = []
+        batch_size = 25  # 🧠 Tune as needed (safe value for HF Spaces)
+        for i in range(0, len(missing_texts), batch_size):
+            batch = missing_texts[i:i + batch_size]
+            results = await asyncio.gather(*[
+                translate(text=txt, source_lang="en", target_lang=payload.target_lang)
+                for txt in batch
+            ])
+            translated_texts.extend(results)
+        
         for txt, translated in zip(missing_texts, translated_texts):
             lang_cache[txt] = translated
             translations[txt] = translated
