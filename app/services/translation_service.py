@@ -7,6 +7,7 @@ import os
 import logging
 import httpx
 from langdetect import detect
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -33,30 +34,38 @@ SECRET_TOKEN = os.getenv("HUGGINGFACE_TOKEN")  # fallback if .env not loaded
 
 
 async def translate(text: str, source_lang: str = "en", target_lang: str = "hi") -> str:
-    """Translate text using private Hugging Face NLLB API with auth."""
+    """Translate text using Hugging Face NLLB API with retries, no signature changes."""
 
-    try:
-        src = LANG_MAP.get(source_lang, "eng_Latn")
-        tgt = LANG_MAP.get(target_lang, "hin_Deva")
+    src = LANG_MAP.get(source_lang, "eng_Latn")
+    tgt = LANG_MAP.get(target_lang, "hin_Deva")
 
-        headers = {
-            "Authorization": f"Bearer {SECRET_TOKEN}"
-        }
+    headers = {
+        "Authorization": f"Bearer {SECRET_TOKEN}"
+    }
 
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                API_URL,
-                params={"text": text, "source": src, "target": tgt},
-                headers=headers,
-                timeout=30,
-            )
-            response.raise_for_status()
-            result = response.json()
-            return result.get("translation_text", text)
+    max_retries = 3
+    backoff_base = 2.0
 
-    except httpx.RequestError as e:
-        logger.warning(f"[TranslationService] HTTPX failed: {e}")
-        return text
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                response = await client.get(
+                    API_URL,
+                    params={"text": text, "source": src, "target": tgt},
+                    headers=headers,
+                )
+                response.raise_for_status()
+                result = response.json()
+                return result.get("translation_text", text)
+
+        except (httpx.HTTPError, httpx.RequestError) as e:
+            logger.warning(f"[Translate Retry {attempt+1}/{max_retries}] Error: {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(backoff_base ** attempt)  # 1s → 2s → 4s
+            else:
+                logger.error("[Translate] All retries failed. Returning original text.")
+                return text
+
 
 
 def detect_language(text: str) -> str:
