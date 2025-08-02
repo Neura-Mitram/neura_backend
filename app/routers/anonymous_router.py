@@ -142,9 +142,9 @@ def update_onboarding(payload: OnboardingUpdateRequest, db: Session = Depends(ge
 #---------------------------------------------------
 
 
-# ✅ Better: use local persistent folder
-CACHE_DIR = Path(__file__).parent / "translation_cache"
-CACHE_DIR.mkdir(exist_ok=True)
+# ✅ Use a writable and persistent location
+CACHE_DIR = Path("/data/translation_cache")
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 
