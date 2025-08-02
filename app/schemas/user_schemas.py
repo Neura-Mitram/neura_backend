@@ -37,6 +37,10 @@ class TranslationRequest(BaseModel):
     strings: List[str]
     target_lang: str  # e.g., "hi"
 
+class TranslationResponse(BaseModel):
+    message: str
+    preferred_lang: str
+    translations: Dict[str, str]
 
 class UserLangRequest(BaseModel):
     device_id: Optional[str]
