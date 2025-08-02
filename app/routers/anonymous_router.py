@@ -11,6 +11,7 @@ import asyncio
 from sqlalchemy.orm import Session
 from app.models.database import SessionLocal
 from app.models.user import User, TierLevel
+from more_itertools import chunked
 from app.utils.auth_utils import ensure_token_user_match, require_token
 
 from app.utils.jwt_utils import create_access_token  #✅ JWT added
@@ -186,23 +187,17 @@ async def translate_ui_texts(
     lang_cache = _load_lang_cache(payload.target_lang)
     translations: Dict[str, str] = {}
 
-    # ✅ Translate only missing strings
-    missing_texts = [txt for txt in payload.strings if txt not in lang_cache]
+    # ✅ Translate only missing strings (batched in 50s)
     if missing_texts:
-
-        translated_texts = []
-        batch_size = 25  # 🧠 Tune as needed (safe value for HF Spaces)
-        for i in range(0, len(missing_texts), batch_size):
-            batch = missing_texts[i:i + batch_size]
-            results = await asyncio.gather(*[
+        for batch in chunked(missing_texts, 50):
+            batch_results = await asyncio.gather(*[
                 translate(text=txt, source_lang="en", target_lang=payload.target_lang)
                 for txt in batch
             ])
-            translated_texts.extend(results)
-        
-        for txt, translated in zip(missing_texts, translated_texts):
-            lang_cache[txt] = translated
-            translations[txt] = translated
+            for txt, translated in zip(batch, batch_results):
+                lang_cache[txt] = translated
+                translations[txt] = translated
+    
         _save_lang_cache(payload.target_lang, lang_cache)
 
     # ✅ Combine cache and new ones
