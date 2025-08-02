@@ -1,10 +1,11 @@
+
 # Copyright (c) 2025 Shiladitya Mallick
 # This file is part of the Neura - Your Smart Assistant project.
 # Licensed under the MIT License - see the LICENSE file for details.
 
 import os
 import logging
-import requests
+import httpx
 from langdetect import detect
 
 logger = logging.getLogger(__name__)
@@ -14,16 +15,7 @@ if os.getenv("ENV") != "production":
     from dotenv import load_dotenv
     load_dotenv()
 
-HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
-TRANSLATION_MODEL = "facebook/nllb-200-distilled-600M"
-
-API_URL = f"https://api-inference.huggingface.co/models/{TRANSLATION_MODEL}"
-HEADERS = {
-    "Authorization": f"Bearer {HF_TOKEN}",
-    "Content-Type": "application/json"
-}
-
-# ✅ Language code mapping
+# ✅ Language code mapping for NLLB
 LANG_MAP = {
     "ar": "ara_Arab", "bg": "bul_Cyrl", "zh": "cmn_Hans", "hr": "hrv_Latn",
     "cs": "ces_Latn", "da": "dan_Latn", "nl": "nld_Latn", "en": "eng_Latn",
@@ -35,35 +27,28 @@ LANG_MAP = {
     "uk": "ukr_Cyrl", "hu": "hun_Latn", "no": "nor_Latn", "vi": "vie_Latn",
 }
 
+# ✅ API for hosted NLLB Space (no token needed)
+API_URL = "https://winstxnhdw-nllb-api.hf.space/api/v4/translator"
 
-def translate(text: str, source_lang: str = "en", target_lang: str = "hi") -> str:
-    """Translate text from source to target using Hugging Face Inference API."""
+async def translate(text: str, source_lang: str = "en", target_lang: str = "hi") -> str:
     try:
         src = LANG_MAP.get(source_lang, "eng_Latn")
         tgt = LANG_MAP.get(target_lang, "hin_Deva")
 
-        payload = {
-            "inputs": text,
-            "parameters": {
-                "src_lang": src,
-                "tgt_lang": tgt
-            }
-        }
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                API_URL,
+                params={"text": text, "source": src, "target": tgt},
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+            return result.get("translation_text", text)
 
-        response = requests.post(API_URL, headers=HEADERS, json=payload)
-        response.raise_for_status()
-        result = response.json()
-
-        if isinstance(result, list) and "translation_text" in result[0]:
-            return result[0]["translation_text"]
-        else:
-            logger.warning("[TranslationService] Unexpected response format.")
-            return text
-
-    except Exception as e:
-        logger.warning(f"[TranslationService] Failed to translate: {e}")
-        return text  # fallback
-
+    except httpx.RequestError as e:
+        logger.warning(f"[TranslationService] HTTPX failed: {e}")
+        return text
+    
 
 def detect_language(text: str) -> str:
     """Detect the ISO 639-1 language code of a string."""

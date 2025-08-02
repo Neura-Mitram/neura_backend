@@ -18,6 +18,7 @@ from app.schemas.user_schemas import (
     TierUpgradeRequest,
     TierDowngradeRequest,
     TranslationRequest,
+    TranslationResponse,
     UserLangRequest
 )
 
@@ -135,8 +136,8 @@ def update_onboarding(payload: OnboardingUpdateRequest, db: Session = Depends(ge
 
 
 
-@router.post("/translate-ui")
-def translate_ui_texts(
+@router.post("/translate-ui", response_model=TranslationResponse)
+async def translate_ui_texts(
     payload: TranslationRequest,
     db: Session = Depends(get_db),
     user_data: dict = Depends(require_token)
@@ -152,23 +153,18 @@ def translate_ui_texts(
     user.preferred_lang = payload.target_lang
     db.commit()
 
-    # ✅ Translate each string
-    translations = {}
-    for original in payload.strings:
-        try:
-            translated = translate(
-                text=original,
-                source_lang="en",
-                target_lang=payload.target_lang
-            )
-            translations[original] = translated
-        except Exception as e:
-            translations[original] = original  # fallback
+    # ✅ Translate each string in parallel
+    import asyncio
+    translated_texts = await asyncio.gather(*[
+        translate(text=txt, source_lang="en", target_lang=payload.target_lang)
+        for txt in payload.strings
+    ])
+    translations = dict(zip(payload.strings, translated_texts))
 
     return {
         "message": "✅ UI translations returned",
         "preferred_lang": user.preferred_lang,
-        "translations": translations  # ✅ main payload
+        "translations": translations
     }
 
 
@@ -261,4 +257,3 @@ def downgrade_tier(payload: TierDowngradeRequest, db: Session = Depends(get_db),
         "device_id": user.temp_uid,
         "new_tier": user.tier.value
     }
-
