@@ -143,8 +143,9 @@ def update_onboarding(payload: OnboardingUpdateRequest, db: Session = Depends(ge
 
 
 # ✅ Cache folder
-CACHE_DIR = Path("translation_cache")
+CACHE_DIR = Path("/tmp/translation_cache")
 CACHE_DIR.mkdir(exist_ok=True)
+
 
 def _get_lang_cache_path(lang: str) -> Path:
     return CACHE_DIR / f"{lang}.json"
