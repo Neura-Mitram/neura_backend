@@ -1,4 +1,3 @@
-
 # Copyright (c) 2025 Shiladitya Mallick
 # This file is part of the Neura - Your Smart Assistant project.
 # Licensed under the MIT License - see the LICENSE file for details.
@@ -27,22 +26,27 @@ LANG_MAP = {
     "uk": "ukr_Cyrl", "hu": "hun_Latn", "no": "nor_Latn", "vi": "vie_Latn",
 }
 
-# ✅ API for hosted NLLB Space (no token needed)
-API_URL = "https://winstxnhdw-nllb-api.hf.space/api/v4/translator"
+# ✅ Your private clone of the NLLB API Space
+API_URL = "https://byshiladityamallick-neura-translation-api.hf.space/api/v4/translator"
+SECRET_TOKEN = os.getenv("HUGGINGFACE_TOKEN")  # fallback if .env not loaded
 
 
 async def translate(text: str, source_lang: str = "en", target_lang: str = "hi") -> str:
-    """Translate text using public Hugging Face NLLB API."""
+    """Translate text using private Hugging Face NLLB API with auth."""
 
     try:
         src = LANG_MAP.get(source_lang, "eng_Latn")
         tgt = LANG_MAP.get(target_lang, "hin_Deva")
 
+        headers = {
+            "Authorization": f"Bearer {SECRET_TOKEN}"
+        }
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 API_URL,
                 params={"text": text, "source": src, "target": tgt},
+                headers=headers,
                 timeout=30,
             )
             response.raise_for_status()
@@ -52,7 +56,7 @@ async def translate(text: str, source_lang: str = "en", target_lang: str = "hi")
     except httpx.RequestError as e:
         logger.warning(f"[TranslationService] HTTPX failed: {e}")
         return text
-    
+
 
 def detect_language(text: str) -> str:
     """Detect the ISO 639-1 language code of a string."""
