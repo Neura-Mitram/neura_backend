@@ -30,10 +30,14 @@ LANG_MAP = {
 # ✅ API for hosted NLLB Space (no token needed)
 API_URL = "https://winstxnhdw-nllb-api.hf.space/api/v4/translator"
 
+
 async def translate(text: str, source_lang: str = "en", target_lang: str = "hi") -> str:
+    """Translate text using public Hugging Face NLLB API."""
+
     try:
         src = LANG_MAP.get(source_lang, "eng_Latn")
         tgt = LANG_MAP.get(target_lang, "hin_Deva")
+
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
