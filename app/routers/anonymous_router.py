@@ -5,6 +5,9 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Header
 from typing import Dict
+import os, json
+from pathlib import Path
+import asyncio
 from sqlalchemy.orm import Session
 from app.models.database import SessionLocal
 from app.models.user import User, TierLevel
@@ -135,6 +138,29 @@ def update_onboarding(payload: OnboardingUpdateRequest, db: Session = Depends(ge
     }
 
 
+#---------------------------------------------------
+#---------------------------------------------------
+
+
+# ✅ Cache folder
+CACHE_DIR = Path("translation_cache")
+CACHE_DIR.mkdir(exist_ok=True)
+
+def _get_lang_cache_path(lang: str) -> Path:
+    return CACHE_DIR / f"{lang}.json"
+
+def _load_lang_cache(lang: str) -> Dict[str, str]:
+    path = _get_lang_cache_path(lang)
+    if path.exists():
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+def _save_lang_cache(lang: str, cache: Dict[str, str]):
+    path = _get_lang_cache_path(lang)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(cache, f, ensure_ascii=False, indent=2)
+
 
 @router.post("/translate-ui", response_model=TranslationResponse)
 async def translate_ui_texts(
@@ -149,17 +175,29 @@ async def translate_ui_texts(
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
 
-    # ✅ Save preferred language if needed
+    # ✅ Save preferred language
     user.preferred_lang = payload.target_lang
     db.commit()
 
-    # ✅ Translate each string in parallel
-    import asyncio
-    translated_texts = await asyncio.gather(*[
-        translate(text=txt, source_lang="en", target_lang=payload.target_lang)
-        for txt in payload.strings
-    ])
-    translations = dict(zip(payload.strings, translated_texts))
+    # ✅ Load existing cache
+    lang_cache = _load_lang_cache(payload.target_lang)
+    translations: Dict[str, str] = {}
+
+    # ✅ Translate only missing strings
+    missing_texts = [txt for txt in payload.strings if txt not in lang_cache]
+    if missing_texts:
+        translated_texts = await asyncio.gather(*[
+            translate(text=txt, source_lang="en", target_lang=payload.target_lang)
+            for txt in missing_texts
+        ])
+        for txt, translated in zip(missing_texts, translated_texts):
+            lang_cache[txt] = translated
+            translations[txt] = translated
+        _save_lang_cache(payload.target_lang, lang_cache)
+
+    # ✅ Combine cache and new ones
+    for txt in payload.strings:
+        translations[txt] = lang_cache.get(txt, txt)
 
     return {
         "message": "✅ UI translations returned",
@@ -167,7 +205,8 @@ async def translate_ui_texts(
         "translations": translations
     }
 
-
+#---------------------------------------------------
+#---------------------------------------------------
 
 @router.post("/profile")
 def get_profile(payload: ProfileRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
