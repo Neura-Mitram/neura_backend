@@ -143,7 +143,8 @@ def update_onboarding(payload: OnboardingUpdateRequest, db: Session = Depends(ge
 
 
 # ✅ Use a writable and persistent location
-CACHE_DIR = Path("/data/translation_cache")
+CACHE_ROOT = Path(os.getenv("HF_HOME", "/data"))
+CACHE_DIR = CACHE_ROOT / "translation_cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
