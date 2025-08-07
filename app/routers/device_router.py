@@ -27,10 +27,8 @@ class DeviceUpdateRequest(BaseModel):
     device_id: str
     device_type: Optional[str]
     os_version: Optional[str]
-    device_token: Optional[str]
     output_audio_mode: Optional[str]
     preferred_delivery_mode: Optional[str]
-    device_token: Optional[str]
 
     @validator('device_type', pre=True, always=True)
     def default_device_type(cls, v):
@@ -68,7 +66,6 @@ async def update_device_context(
         user.os_version = payload.os_version
         user.output_audio_mode = payload.output_audio_mode
         user.preferred_delivery_mode = payload.preferred_delivery_mode
-        user.device_token = payload.device_token
         user.last_active_at = datetime.utcnow()
 
         # Update FCM token if provided
@@ -82,20 +79,22 @@ async def update_device_context(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class RetryFCMTokenRequest(BaseModel):
+    token: str
+    device_id: str
 
 @router.post("/retry-device-fcm")
 def retry_fcm_token(
-    token: str = Form(...),
-    device_id: str = Form(...),
+    payload: RetryFCMTokenRequest,
     db: Session = Depends(get_db),
     user_data: dict = Depends(require_token)
 ):
-    ensure_token_user_match(user_data["sub"], device_id)
+    ensure_token_user_match(user_data["sub"], payload.device_id)
 
-    user = db.query(User).filter(User.temp_uid == device_id).first()
+    user = db.query(User).filter(User.temp_uid == payload.device_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    user.fcm_token = token
+    user.fcm_token = payload.token
     db.commit()
     return {"success": True, "message": "FCM token updated"}
