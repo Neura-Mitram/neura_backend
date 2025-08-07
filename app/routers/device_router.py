@@ -53,7 +53,7 @@ class DeviceUpdateRequest(BaseModel):
 async def update_device_context(
     request: Request,
     payload: DeviceUpdateRequest = Body(...),
-    fcm_token: Optional[str] = Form(None),
+    fcm_token: Optional[str] = Header(None, alias="X-FCM-Token"),
     db: Session = Depends(get_db),
     user_data: dict = Depends(require_token)
 ):
