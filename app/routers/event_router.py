@@ -4,6 +4,7 @@
 
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.models.database import SessionLocal
@@ -97,12 +98,109 @@ def check_nudge_fallback(
     }
 
 
-# Input
+#-------------------------------------------------------------------Sensor Events Handle ----------------------------------------------------------
 # ✅ Input schema for dynamic mobile events
 class EventInput(BaseModel):
     device_id: str
-    event_type: str  # e.g., "spotify_open", "gmail_open", "foreground_app"
-    metadata: dict = {}
+    event_type: str  # e.g. "sensor_context", "motion_update", "battery_update"
+    metadata: Optional[Dict[str, Any]] = {}
+
+
+def _hour_from_metadata_time(metadata: dict) -> Optional[int]:
+    t = metadata.get("time")
+    if not t:
+        return None
+    try:
+        # support "23:45" or ISO-like "2025-08-09T23:45:00"
+        if ":" in t and len(t.split(":")[0]) <= 2:
+            return int(t.split(":")[0])
+        if "T" in t:
+            return int(t.split("T")[1].split(":")[0])
+    except Exception:
+        return None
+    return None
+
+
+def evaluate_context(event_type: str, metadata: dict) -> dict:
+    """
+    Produce a small, rule-driven summary: priority and human tags.
+    Keep rules conservative — AI will handle wording.
+    """
+    priority = "normal"
+    tags = []
+
+    # Allow the native sender to override priority
+    if metadata.get("priority") in ("low", "normal", "high"):
+        priority = metadata.get("priority")
+
+    # Custom prompt => treat as high-priority actionable (unless overridden)
+    if metadata.get("custom_prompt"):
+        priority = "high"
+        tags.append("custom prompt")
+
+    # Battery
+    battery = metadata.get("battery")
+    if isinstance(battery, (int, float)):
+        if battery <= 10:
+            priority = "high"
+            tags.append("very low battery")
+        elif battery <= 20 and priority != "high":
+            tags.append("low battery")
+
+    # Charging state
+    if metadata.get("charging") is True:
+        tags.append("charging")
+
+    # Motion / activity
+    motion = (metadata.get("motion") or "").lower()
+    if motion:
+        if motion in ("still", "stationary", "lying down", "sitting"):
+            tags.append("inactivity")
+        elif motion in ("walking", "running", "on_bike"):
+            tags.append("in motion")
+
+    # Time-of-day sensitive late-night rule
+    hour = _hour_from_metadata_time(metadata)
+    if hour is not None:
+        if hour >= 23 or hour < 6:
+            tags.append("late night")
+
+    # Light
+    light = metadata.get("light")
+    if isinstance(light, (int, float)):
+        # assume normalized 0..1 or raw lux; treat <0.2 as dim if normalized
+        if 0 <= light <= 1:
+            if light < 0.2:
+                tags.append("dim environment")
+        else:
+            # raw lux heuristic
+            if light < 30:
+                tags.append("dim environment")
+
+    # Proximity
+    prox = metadata.get("proximity")
+    if prox in ("near", "close"):
+        tags.append("near to face / pocket")
+
+    # Bluetooth / Car connected
+    if metadata.get("bluetooth_connected") and metadata.get("bluetooth_tag") == "car":
+        priority = "high"
+        tags.append("driving / car connected")
+
+    # Ambient noise (optional)
+    noise = metadata.get("ambient_noise")
+    if noise and isinstance(noise, str) and noise.lower() in ("loud", "noisy"):
+        tags.append("noisy environment")
+
+    # Temperature
+    temp = metadata.get("temperature")
+    if isinstance(temp, (int, float)) and temp >= 35:
+        tags.append("hot environment")
+
+    # Deduplicate & return
+    tags = list(dict.fromkeys(tags))
+    return {"priority": priority, "tags": tags}
+
 
 @router.post("/event/push-mobile")
 async def handle_event_push(
@@ -111,94 +209,98 @@ async def handle_event_push(
     db: Session = Depends(get_db),
     user_data: dict = Depends(require_token)
 ):
-    # ✅ Validate token and device match
+    # --- token/device validation (keep as you had it) ---
     ensure_token_user_match(user_data["sub"], payload.device_id)
 
-    # ✅ Get user by device_id
+    # --- fetch user by device_id ---
     user = db.query(User).filter(User.temp_uid == payload.device_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found for this device_id")
 
-    # 🔕 Respect tier & preferences
+    # --- tier & delivery preference checks ---
     if user.tier.value == "free" or not user.instant_alerts_enabled:
         return {"status": "skipped", "reason": "Free tier or realtime alerts disabled"}
+
     if user.preferred_delivery_mode != "voice":
         return {"status": "skipped", "reason": "User prefers text mode"}
 
-    # ✅ Keyword detection (smart phrases in app metadata)
-    keyword_result = await trigger_voice_if_keyword_matched(
-        request=request,
-        user=user,
-        source=payload.event_type,
-        content=json.dumps(payload.metadata or {}),
-        db=db
-    )
-    if keyword_result.get("status") == "sent":
-        return {
-            "status": "completed",
-            "trigger_type": "keyword",
-            "details": keyword_result
-        }
+    # --- fragile emotion & unsafe location checks ---
+    if is_fragile_emotion(user):
+        logger.info(f"⚠️ Emotion too fragile. Skipping ping for user {user.id}")
+        return {"status": "skipped", "reason": "fragile_emotion"}
 
-    # ✅ Emotion-aware fallback tone mapping
-    base_prompts = {
-        "spotify_open": {
-            "surprise": "Looks like you're diving into music. Anything on your mind?",
-            "sadness": "Some music to relax? Take a deep breath. I'm here.",
-            "love": "Music is a good escape. Be kind to yourself today.",
-        },
-        "gmail_open": {
-            "surprise": "Checking your email? Hope it's all manageable!",
-            "sadness": "Don't let work emails ruin your day. You're doing great.",
-            "love": "Emails can wait. But your rest matters too.",
-        },
-        "call_start": {
-            "surprise": "All the best for your call. Be confident!",
-            "sadness": "Take it easy. You're in control.",
-            "love": "Keep it short if you’re tired. You’ve got this.",
-        },
-        "calendar_open": {
-            "surprise": "Let’s plan the day. Anything exciting coming up?",
-            "sadness": "One thing at a time. You’ve got this.",
-            "love": "Don’t overbook yourself. Energy is precious.",
-        },
-        "foreground_app": {
-            "surprise": "You just opened something. Need a hand?",
-            "sadness": "Using your phone again? Hope you're okay.",
-            "love": "You’re back on your phone. Just checking in on you.",
-        }
-    }
+    if is_gps_near_unsafe_area(user, db):
+        logger.info(f"📍 Unsafe zone. Skipping ping for user {user.id}")
+        return {"status": "skipped", "reason": "unsafe_location"}
 
-    emotion = user.emotion_status or "love"
-    metadata_str = json.dumps(payload.metadata or {}, ensure_ascii=False)
+    # --- evaluate incoming context ---
+    event_type = payload.event_type
+    metadata = payload.metadata or {}
+    emotion = user.emotion_status or "neutral"
 
-    tone_hint = base_prompts.get(payload.event_type, {}).get(
-        emotion,
-        "You just interacted with your phone. I'm here if you need me."
+    context_eval = evaluate_context(event_type, metadata)
+    tags_str = ", ".join(context_eval["tags"]) or "no special conditions"
+
+    logger.info(
+        f"📡 Received event={event_type} device={payload.device_id} user={user.id} "
+        f"priority={context_eval['priority']} tags=[{tags_str}] metadata={metadata}"
     )
 
-    ai_prompt = (
-        f"User triggered app event: {payload.event_type}\n"
-        f"Emotion: {emotion}\n"
-        f"App metadata: {metadata_str}\n"
-        f"Tone hint: \"{tone_hint}\"\n"
-        "Now generate a short, friendly, voice-first reply in a helpful tone."
+    # --- skip trivial contexts (conservative) unless caller forces send ---
+    if context_eval["priority"] == "normal" and not context_eval["tags"] and not metadata.get("always_send"):
+        return {"status": "skipped", "reason": "no_significant_context"}
+
+    # --- Build AI prompt (Jarvis-style) ---
+    # If caller supplied a custom prompt, prefer that as base
+    custom = metadata.get("custom_prompt")
+    metadata_str = json.dumps(metadata, ensure_ascii=False)
+
+    ai_system_intro = (
+        "You are Neura, a proactive assistant similar to Jarvis. "
+        "You should generate a short, friendly, situation-aware voice-first message "
+        "that feels empathetic and helpful for the user."
     )
 
+    ai_context_block = (
+        f"Event type: {event_type}\n"
+        f"Priority: {context_eval['priority']}\n"
+        f"Tags: {tags_str}\n"
+        f"User emotion: {emotion}\n"
+        f"Sensor/metadata: {metadata_str}\n"
+    )
+
+    if custom:
+        # Ask AI to refine the custom prompt rather than ignore it
+        ai_prompt = (
+            f"{ai_system_intro}\n\n"
+            f"Use the user's custom prompt as the main content, improve tone and brevity:\n\n"
+            f"Custom prompt: {custom}\n\n"
+            f"{ai_context_block}\n"
+            "Return a single short voice-friendly sentence (or two)."
+        )
+    else:
+        ai_prompt = (
+            f"{ai_system_intro}\n\n"
+            f"{ai_context_block}\n"
+            "Generate a short, voice-friendly, empathetic message the assistant should say now."
+        )
+
+    # --- Generate message via AI (with fallback) ---
     try:
         full_prompt = generate_ai_reply(ai_prompt)
     except Exception as e:
-        logger.warning(f"⚠️ Mistral fallback due to error: {e}")
-        full_prompt = tone_hint
+        logger.warning(f"⚠️ AI generation failed: {e}")
+        # fallback: prefer custom prompt or a terse auto message
+        full_prompt = custom if custom else f"Sensor event: {event_type}. {', '.join(context_eval['tags'])}".strip()
+        if not full_prompt:
+            full_prompt = "Just checking in — how are you doing?"
 
-    logger.info(f"📲 Event: {payload.event_type} | Emotion: {emotion} | Device: {payload.device_id}")
-
-    # ✅ Log interaction
+    # --- Log Interaction ---
     try:
         db.add(InteractionLog(
             user_id=user.id,
-            source_app=payload.event_type,
-            intent="proactive_nudge",
+            source_app=event_type,
+            intent="proactive_sensor_nudge",
             content=full_prompt,
             timestamp=datetime.utcnow()
         ))
@@ -206,12 +308,15 @@ async def handle_event_push(
     except Exception as e:
         logger.warning(f"⚠️ Failed to log interaction: {e}")
 
-    # 🌍 Translate if needed
+    # --- Translate if needed ---
     user_lang = user.preferred_lang or "en"
-    if user_lang != "en":
-        full_prompt = translate(full_prompt, source_lang="en", target_lang=user_lang)
+    try:
+        if user_lang != "en":
+            full_prompt = translate(full_prompt, source_lang="en", target_lang=user_lang)
+    except Exception as e:
+        logger.warning(f"⚠️ Translation failed: {e}")
 
-    # 🗣️ Send to voice
+    # --- Send voice synthesis and return response (with fallback) ---
     try:
         result = await send_voice_to_neura(
             request=request,
@@ -221,23 +326,27 @@ async def handle_event_push(
             emotion=emotion,
             lang=user_lang
         )
-        return {
-            "status": "completed",
-            "keyword_trigger": keyword_result,
-            "event_trigger": {
-                "prompt": full_prompt,
-                "details": result
-            },
-            "emotion": emotion
-        }
     except Exception as e:
-        logger.error(f"❌ Voice synthesis failed: {str(e)}")
-        return {
-            "status": "voice_failed",
-            "fallback_text": full_prompt
-        }
+        logger.error(f"❌ Voice synthesis failed: {e}")
+        return {"status": "voice_failed", "fallback_text": full_prompt}
 
+    # --- Update emotion / profile signals after sending ---
+    try:
+        await update_emotion_status(user, full_prompt, db, source=event_type)
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to update emotion status: {e}")
 
+    logger.info(f"✅ Sensor event delivered to user {user.id} | status={result.get('status')}")
+    return {
+        "status": "completed",
+        "event_type": event_type,
+        "priority": context_eval["priority"],
+        "tags": context_eval["tags"],
+        "prompt": full_prompt,
+        "details": result
+    }
+
+#-------------------------------------------------------------------End Sensor Events Handle ----------------------------------------------------------
 
 class TravelCheckInput(BaseModel):
     device_id: str
@@ -291,4 +400,3 @@ async def check_travel_trigger(
         "tips_audio_url": tip_result["audio_url"],
         "moment_logged": True
     }
-
