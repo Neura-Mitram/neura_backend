@@ -188,6 +188,9 @@ async def translate_ui_texts(
     lang_cache = _load_lang_cache(payload.target_lang)
     translations: Dict[str, str] = {}
 
+    # ✅ Find strings that are not already cached
+    missing_texts = [txt for txt in payload.strings if txt not in lang_cache]
+
     # ✅ Translate only missing strings (batched in 50s)
     if missing_texts:
         for batch in chunked(missing_texts, 50):
