@@ -3,7 +3,7 @@
 # Licensed under the MIT License - see the LICENSE file for details.
 
 from fastapi import Request, HTTPException
-from app.utils.auth_utils import decode_token  # this should decode JWT
+from app.utils.auth_utils import require_token  # this should decode JWT
 from app.models.database import SessionLocal
 from app.models.user import User, TierLevel
 from slowapi import Limiter
@@ -27,7 +27,7 @@ async def get_tier_limit(request: Request) -> str:
 
     # 2️⃣ Decode token
     try:
-        payload = decode_token(token)  # must return dict with "sub"
+        payload = require_token(token)  # must return dict with "sub"
         user_id = payload.get("sub")
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
