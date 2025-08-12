@@ -12,7 +12,6 @@ from collections import Counter
 from app.utils.auth_utils import require_token
 from app.models.message_model import Message
 from app.models.user import User
-from app.utils.rate_limit_utils import get_tier_limit, limiter
 
 router = APIRouter()
 
@@ -25,7 +24,6 @@ def get_db():
         db.close()
 
 @router.get("/emotion-summary")
-@limiter.limit(get_tier_limit)
 async def emotion_summary(
     request: Request,
     start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
