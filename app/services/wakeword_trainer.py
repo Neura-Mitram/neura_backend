@@ -8,6 +8,16 @@ import tensorflow as tf
 import numpy as np
 import os
 import librosa
+from pathlib import Path
+
+#------------------PATH SET--------------------------
+MASTER_WAKE_AUDIO = Path("/tmp/wake_audio")
+RAW_AUDIO_BASE = MASTER_WAKE_AUDIO / "raw"
+MODEL_BASE = MASTER_WAKE_AUDIO / "models"
+
+os.makedirs(RAW_AUDIO_BASE, exist_ok=True)
+os.makedirs(MODEL_BASE, exist_ok=True)
+#----------------------------------------------------
 
 def train_wakeword_model(device_id, filepaths, label):
     samples, labels = [], []
@@ -43,9 +53,8 @@ def train_wakeword_model(device_id, filepaths, label):
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
     tflite_model = converter.convert()
 
-    os.makedirs("trained_models", exist_ok=True)
-    tflite_path = f"trained_models/{device_id}_{label}.tflite"
+    tflite_path = MODEL_BASE / f"{device_id}_{label}.tflite"
     with open(tflite_path, "wb") as f:
         f.write(tflite_model)
 
-    return tflite_path
+    return str(tflite_path)
