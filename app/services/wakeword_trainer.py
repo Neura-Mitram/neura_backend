@@ -2,13 +2,16 @@
 # This file is part of the Neura - Your Smart Assistant project.
 # Licensed under the MIT License - see the LICENSE file for details.
 
-
-
+import os
 import tensorflow as tf
 import numpy as np
-import os
 import librosa
 from pathlib import Path
+
+# ------------------ NUMBA CACHE FIX ----------------
+os.environ["NUMBA_CACHE_DIR"] = "/tmp/numba_cache"
+os.makedirs("/tmp/numba_cache", exist_ok=True)
+# ---------------------------------------------------
 
 #------------------PATH SET--------------------------
 MASTER_WAKE_AUDIO = Path("/tmp/wake_audio")
