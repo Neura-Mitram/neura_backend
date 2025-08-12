@@ -9,7 +9,6 @@ from app.models.database import SessionLocal
 from app.models.message_model import Message
 from app.models.user import User
 from app.utils.auth_utils import ensure_token_user_match, require_token
-from app.utils.rate_limit_utils import get_tier_limit, limiter
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/memory", tags=["Memory"])
@@ -24,7 +23,6 @@ def get_db():
 
 # 🎯 Export
 @router.get("/export")
-@limiter.limit(get_tier_limit)
 def export_user_memory(
     request: Request,
     device_id: str = Query(..., description="The device_id assigned during anonymous login"),
@@ -61,7 +59,6 @@ def export_user_memory(
 
 # 🎯 Delete
 @router.delete("/delete")
-@limiter.limit(get_tier_limit)
 def delete_memory(
     request: Request,
     device_id: str = Query(..., description="The device_id assigned during anonymous login"),
@@ -98,7 +95,6 @@ class MemoryLogRequest(BaseModel):
     emotion_filter: str = None
 
 @router.post("/memory-log")
-@limiter.limit(get_tier_limit)
 def get_memory_log(
     request: Request,
     payload: MemoryLogRequest,
@@ -145,7 +141,6 @@ class MarkImportantRequest(BaseModel):
     important: bool
 
 @router.post("/mark-important")
-@limiter.limit(get_tier_limit)
 def mark_important_message(
     request: Request,
     payload: MarkImportantRequest,
@@ -208,7 +203,6 @@ class MemoryToggleRequest(BaseModel):
     enabled: bool
 
 @router.post("/toggle-memory")
-@limiter.limit(get_tier_limit)
 def toggle_memory(
     request: Request,
     payload: MemoryToggleRequest,
