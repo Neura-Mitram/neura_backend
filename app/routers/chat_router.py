@@ -13,7 +13,6 @@ from app.utils.tier_logic import get_monthly_limit
 from pydantic import BaseModel
 from datetime import datetime
 
-from app.utils.rate_limit_utils import get_tier_limit, limiter
 from app.services.intent_router_core import detect_and_route_intent
 from app.schemas.intent_schemas import IntentRequest
 from app.services.fallback_chat_ai import handle_chat_fallback
