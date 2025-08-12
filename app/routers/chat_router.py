@@ -42,7 +42,6 @@ class ChatRequest(BaseModel):
     conversation_id: int = 1
 
 @router.post("/chat-with-neura")
-@limiter.limit(get_tier_limit)
 async def chat_with_neura(
     request: Request,
     payload: ChatRequest,
