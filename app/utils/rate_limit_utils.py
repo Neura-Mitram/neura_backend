@@ -17,7 +17,7 @@ TIER_RATES = {
     TierLevel.pro.value: "60/minute",
 }
 
-async def get_tier_limit(request: Request) -> str:
+def get_tier_limit(request: Request) -> str:
     # 1️⃣ Get token from header
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
