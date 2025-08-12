@@ -6,7 +6,8 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Request
 from sqlalchemy.orm import Session
 import os
-from app.services.wakeword_trainer import train_wakeword_model
+from pathlib import Path
+from app.services.wakeword_trainer import train_wakeword_model, MASTER_WAKE_AUDIO, RAW_AUDIO_BASE, MODEL_BASE
 from app.models.database import SessionLocal
 from app.models.user import User
 from app.utils.auth_utils import require_token, ensure_token_user_match
@@ -39,22 +40,22 @@ async def train_custom_wakeword(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    audio_dir = f"wake_audio/{device_id}"
+    audio_dir = RAW_AUDIO_BASE / device_id
     os.makedirs(audio_dir, exist_ok=True)
 
     filepaths = []
     for idx, file in enumerate([file1, file2, file3], start=1):
         filename = f"{wakeword_label}_{idx}.wav"
-        path = os.path.join(audio_dir, filename)
+        path = audio_dir / filename
         with open(path, "wb") as f:
             f.write(await file.read())
-        filepaths.append(path)
+        filepaths.append(str(path))
 
     tflite_path = train_wakeword_model(device_id, filepaths, wakeword_label)
 
     return {
         "message": "Wakeword model trained successfully",
-        "model_path": f"/{tflite_path}"
+        "model_path": f"/wake_audio/models/{device_id}_{wakeword_label}.tflite"
     }
 
 
@@ -66,12 +67,12 @@ def download_wakeword_model(
 ):
     ensure_token_user_match(user_data["sub"], device_id)
 
-    tflite_path = f"trained_models/{device_id}_neura.tflite"
-    if not os.path.exists(tflite_path):
+    tflite_path = MODEL_BASE / f"{device_id}_neura.tflite"
+    if not tflite_path.exists():
         raise HTTPException(status_code=404, detail="Model not found.")
 
     return FileResponse(
-        path=tflite_path,
+        path=str(tflite_path),
         media_type="application/octet-stream",
         filename="wakeword_model.tflite"
     )
