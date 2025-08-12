@@ -15,7 +15,6 @@ from app.models.habit import Habit
 from app.models.sos import SOSLog
 from app.models.user_usage_stat import UserUsageStat
 from app.utils.auth_utils import require_token
-from app.utils.rate_limit_utils import get_tier_limit, limiter
 from app.utils.tier_logic import (
     get_monthly_limit,
     get_max_memory_messages,
@@ -49,7 +48,6 @@ def get_db():
         db.close()
 
 @router.get("/profile-summary")
-@limiter.limit(get_tier_limit)
 async def profile_summary(
     request: Request,
     device_id: str = Query(..., description="The device_id assigned during anonymous login"),
@@ -99,7 +97,6 @@ async def profile_summary(
 
 
 @router.get("/user/tier-info")
-@limiter.limit(get_tier_limit)
 async def get_tier_info(
     request: Request,
     device_id: str = Query(...),
