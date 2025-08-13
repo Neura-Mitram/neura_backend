@@ -26,13 +26,14 @@ def get_db():
 @router.get("/emotion-summary")
 async def emotion_summary(
     request: Request,
+    device_id: str = Query(..., description="The device_id assigned during anonymous login"),
     start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
     end_date: str = Query(..., description="End date in YYYY-MM-DD format"),
     db: Session = Depends(get_db),
     user_data: dict = Depends(require_token)
 ):
     """
-    Returns counts of each emotion label over the given date range.
+    Returns counts of each emotion label over the given date range for the user identified by device_id.
     """
 
     # Validate dates
@@ -45,10 +46,10 @@ async def emotion_summary(
     if end < start:
         raise HTTPException(status_code=400, detail="End date cannot be before start date.")
 
-    # ✅ Load user via device_id
-    user = db.query(User).filter(User.temp_uid == user_data["sub"]).first()
+    # Load user via device_id
+    user = db.query(User).filter(User.temp_uid == device_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="User not found for this device_id")
 
     # Query messages
     messages = (
@@ -68,8 +69,10 @@ async def emotion_summary(
     summary = [{"emotion": k, "count": v} for k, v in emotion_counter.items()]
 
     return {
+        "device_id": device_id,
         "start_date": start_date,
         "end_date": end_date,
         "total_records": len(messages),
         "summary": summary
     }
+
