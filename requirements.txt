@@ -41,8 +41,8 @@ python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 cryptography==42.0.5
 
-# ---- DB / Postgres ----
-psycopg2-binary==2.9.9
+# ---- DB / MySQL  ----
+pymysql==1.1.1
 
 # ---- Audio / ML ----
 tensorflow==2.13.0
@@ -56,3 +56,4 @@ langdetect==1.0.9
 
 # ---- Utility Helpers ----
 more-itertools>=10.0.0
+
