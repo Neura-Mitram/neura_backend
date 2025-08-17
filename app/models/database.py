@@ -15,10 +15,16 @@ if os.environ.get("ENV") != "production":
 # ✅ Load required env variable
 SQLALCHEMY_DATABASE_URL = os.environ["DATABASE_URL"]
 
-# ✅ SQLAlchemy engine
-engine = create_engine(SQLALCHEMY_DATABASE_URL, echo=False)
+# ✅ Engine with Supabase Transaction Pooler
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    pool_size=10,          # Keep 10 connections open
+    max_overflow=20,       # Allow 20 extra if under load
+    pool_recycle=1800,     # Recycle every 30 mins
+    pool_pre_ping=True     # Validate before using connection
+)
 
-# ✅ Session
+# ✅ Session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # ✅ Base model
