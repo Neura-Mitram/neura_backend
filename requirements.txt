@@ -1,6 +1,6 @@
 ﻿--extra-index-url https://download.pytorch.org/whl/cpu
 
-# ---- Core FastAPI stack ----
+# ---- Core FastAPI stack ---
 fastapi==0.99.1
 uvicorn==0.34.2
 sqlalchemy==1.4.52
@@ -59,6 +59,7 @@ langdetect==1.0.9
 
 # ---- Utility Helpers ----
 more-itertools>=10.0.0
+
 
 
 
