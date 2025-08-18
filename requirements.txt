@@ -44,6 +44,9 @@ cryptography==42.0.5
 # ---- DB / PostgreSQL ---- 
 psycopg2-binary==2.9.9
 
+# ---- SUprabase Storage & Others ---- 
+supabase==2.10.0
+
 # ---- Audio / ML ----
 tensorflow==2.13.0
 librosa==0.10.1
@@ -56,5 +59,6 @@ langdetect==1.0.9
 
 # ---- Utility Helpers ----
 more-itertools>=10.0.0
+
 
 
