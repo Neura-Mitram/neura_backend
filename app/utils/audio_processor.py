@@ -5,11 +5,15 @@
 import os
 from dotenv import load_dotenv
 from faster_whisper import WhisperModel
-from urllib.parse import urlencode
+import aiohttp
+import base64
+import tempfile
+
+load_dotenv()  # Load environment variables from .env
 
 # ------------------- Whisper Transcription -------------------
 
-# Load Whisper model (small footprint for Hugging Face Spaces)
+# Load Whisper model (small footprint)
 whisper_model = WhisperModel("tiny", compute_type="int8")
 
 def transcribe_audio(filepath: str) -> str:
@@ -24,7 +28,16 @@ def transcribe_audio(filepath: str) -> str:
     except Exception as e:
         return f"[Transcription Error: {e}]"
 
-# ------------------- Text-to-Speech with ElevenLabs (Streaming) -------------------
+def transcribe_audio_bytes(file_bytes: bytes) -> str:
+    """
+    Transcribes audio from in-memory bytes using Whisper.
+    """
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tmp:
+        tmp.write(file_bytes)
+        tmp.flush()
+        return transcribe_audio(tmp.name)
+
+# ------------------- Text-to-Speech with ElevenLabs -------------------
 
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 if not ELEVENLABS_API_KEY:
@@ -61,33 +74,33 @@ LANG_VOICE_MAP = {
     ]
 }
 
-def synthesize_voice(text: str, gender: str = "male", emotion: str = "unknown", lang: str = "en") -> str:
+async def synthesize_voice(
+    text: str, 
+    gender: str = "male", 
+    emotion: str = "unknown", 
+    lang: str = "en"
+) -> str:
     """
-    Returns a streamable ElevenLabs WebSocket URL for the given text.
-    This does NOT save audio to disk.
-    Supports language fallback.
+    Calls ElevenLabs TTS API directly and returns Base64-encoded audio.
     """
     voice_opts = LANG_VOICE_MAP.get(lang, DEFAULT_VOICE_MAP)
     voice_id = voice_opts.get(gender, DEFAULT_VOICE_MAP.get(gender, DEFAULT_VOICE_MAP["male"]))
-
     settings = EMOTION_VOICE_SETTINGS.get(emotion, EMOTION_VOICE_SETTINGS["unknown"])
 
-    query = urlencode({
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+    payload = {
         "text": text,
-        "voice_id": voice_id,
-        "model_id": ELEVENLABS_MODEL_ID,
-        "stability": settings["stability"],
-        "similarity_boost": settings["similarity_boost"]
-    })
+        "voice_settings": {"stability": settings["stability"], "similarity_boost": settings["similarity_boost"]},
+        "generation_config": {"language": lang}
+    }
 
-    return f"wss://byshiladityamallick-neura-smart-assistant.hf.space/stream/elevenlabs?{query}"
-
-def transcribe_audio_bytes(file_bytes: bytes) -> str:
-    """
-    Transcribes audio from in-memory bytes using Whisper.
-    """
-    import tempfile
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tmp:
-        tmp.write(file_bytes)
-        tmp.flush()
-        return transcribe_audio(tmp.name)
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            url,
+            headers={"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"},
+            json=payload
+        ) as resp:
+            if resp.status != 200:
+                raise Exception(f"TTS error: {resp.status} {await resp.text()}")
+            audio_bytes = await resp.read()
+            return base64.b64encode(audio_bytes).decode("utf-8")
