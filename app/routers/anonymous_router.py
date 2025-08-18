@@ -86,9 +86,11 @@ def anonymous_login(payload: LoginRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/update-onboarding")
-def update_onboarding(payload: OnboardingUpdateRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
-
-
+async def update_onboarding(
+    payload: OnboardingUpdateRequest,
+    db: Session = Depends(get_db),
+    user_data: dict = Depends(require_token)
+):
     if not payload.device_id:
         raise HTTPException(status_code=400, detail="Missing device_id")
 
@@ -106,13 +108,13 @@ def update_onboarding(payload: OnboardingUpdateRequest, db: Session = Depends(ge
         user.ai_name = payload.ai_name
     if payload.voice:
         user.voice = payload.voice
-    if payload.preferred_lang:  # ✅ Add this block
+    if payload.preferred_lang:
         user.preferred_lang = payload.preferred_lang
 
     db.commit()
 
     # ✅ Wakeword instruction text
-    base_instruction = "Please record your wake word 3 times so Neura can activate by voice. Example : 'Hey Neura or Neura Baby' "
+    base_instruction = "Please record your wake word 3 times so Neura can activate by voice. Example: 'Hey Neura or Neura Baby'."
     user_lang = user.preferred_lang or "en"
 
     if user_lang != "en":
@@ -120,8 +122,8 @@ def update_onboarding(payload: OnboardingUpdateRequest, db: Session = Depends(ge
     else:
         translated_text = base_instruction
 
-    # ✅ Generate streaming voice
-    stream_url = synthesize_voice(
+    # ✅ Await async TTS
+    stream_url = await synthesize_voice(
         text=translated_text,
         gender=user.voice if user.voice in ["male", "female"] else "female",
         emotion="joy",
@@ -136,8 +138,9 @@ def update_onboarding(payload: OnboardingUpdateRequest, db: Session = Depends(ge
         "preferred_lang": user.preferred_lang,
         "next_step": "WakeWord Setup",
         "wakeword_instruction": translated_text,
-        "audio_stream_url": stream_url  # 🔊 for Flutter autoplay
+        "audio_stream_url": stream_url,  # 🔊 for Flutter autoplay
     }
+
 
 
 #---------------------------------------------------
