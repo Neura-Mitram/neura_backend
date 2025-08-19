@@ -38,7 +38,7 @@ def transcribe_audio_bytes(file_bytes: bytes) -> str:
         tmp.flush()
         return transcribe_audio(tmp.name)
 
-# ------------------- ElevenLabs TTS -------------------
+# ------------------- Text-to-Speech with ElevenLabs -------------------
 
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 if not ELEVENLABS_API_KEY:
@@ -51,14 +51,7 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 SUPABASE_BUCKET = "neura_tts_audio"
 
-if not SUPABASE_URL or not SUPABASE_KEY:
-    raise ValueError("SUPABASE_URL or SUPABASE_KEY not set in environment variables.")
-
-# Ensure SUPABASE_URL ends with '/'
-if not SUPABASE_URL.endswith("/"):
-    SUPABASE_URL += "/"
-
-# ------------------- Voice Settings -------------------
+# ------------------- Voice / Emotion Settings -------------------
 
 EMOTION_VOICE_SETTINGS = {
     "joy": {"stability": 0.3, "similarity_boost": 0.85},
@@ -70,11 +63,13 @@ EMOTION_VOICE_SETTINGS = {
     "unknown": {"stability": 0.5, "similarity_boost": 0.75},
 }
 
+# Fallback voice IDs
 DEFAULT_VOICE_MAP = {
     "female": "onwK4e9ZLuTAKqWW03F9",  # Grace
     "male": "EXAVITQu4vr4xnSDxMaL"     # Antoni
 }
 
+# Multilingual voice selection
 LANG_VOICE_MAP = {
     lang_code: {
         "female": DEFAULT_VOICE_MAP["female"],
@@ -88,9 +83,13 @@ LANG_VOICE_MAP = {
 
 # ------------------- Async Supabase Client -------------------
 
-storage = create_client(SUPABASE_URL, SUPABASE_KEY, is_async=True)
+storage = create_client(
+    url=SUPABASE_URL,
+    headers={"apiKey": SUPABASE_KEY},
+    is_async=True
+)
 
-# ------------------- Async TTS Function -------------------
+# ------------------- Async Text-to-Speech -------------------
 
 async def synthesize_voice(
     text: str,
@@ -143,7 +142,7 @@ async def synthesize_voice(
     if not signed_url:
         raise Exception(f"Signed URL generation failed: {signed_url_response}")
 
-    # -------- Ensure full URL --------
+    # Ensure full URL
     if not signed_url.startswith("http"):
         signed_url = f"{SUPABASE_URL}{signed_url}"
 
