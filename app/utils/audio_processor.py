@@ -6,7 +6,6 @@ import os
 from dotenv import load_dotenv
 from faster_whisper import WhisperModel
 import aiohttp
-import base64
 import tempfile
 import uuid
 from storage3 import create_client
@@ -39,7 +38,7 @@ def transcribe_audio_bytes(file_bytes: bytes) -> str:
         tmp.flush()
         return transcribe_audio(tmp.name)
 
-# ------------------- Text-to-Speech with ElevenLabs -------------------
+# ------------------- ElevenLabs TTS -------------------
 
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 if not ELEVENLABS_API_KEY:
@@ -51,9 +50,16 @@ ELEVENLABS_MODEL_ID = "eleven_multilingual_v2"
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 SUPABASE_BUCKET = "neura_tts_audio"
-storage = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Emotion → voice settings
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise ValueError("SUPABASE_URL or SUPABASE_KEY not set in environment variables.")
+
+# Ensure SUPABASE_URL ends with '/'
+if not SUPABASE_URL.endswith("/"):
+    SUPABASE_URL += "/"
+
+# ------------------- Voice Settings -------------------
+
 EMOTION_VOICE_SETTINGS = {
     "joy": {"stability": 0.3, "similarity_boost": 0.85},
     "anger": {"stability": 0.2, "similarity_boost": 0.7},
@@ -64,13 +70,11 @@ EMOTION_VOICE_SETTINGS = {
     "unknown": {"stability": 0.5, "similarity_boost": 0.75},
 }
 
-# Fallback voice IDs
 DEFAULT_VOICE_MAP = {
     "female": "onwK4e9ZLuTAKqWW03F9",  # Grace
     "male": "EXAVITQu4vr4xnSDxMaL"     # Antoni
 }
 
-# Multilingual voice selection
 LANG_VOICE_MAP = {
     lang_code: {
         "female": DEFAULT_VOICE_MAP["female"],
@@ -82,6 +86,12 @@ LANG_VOICE_MAP = {
     ]
 }
 
+# ------------------- Async Supabase Client -------------------
+
+storage = create_client(SUPABASE_URL, SUPABASE_KEY, is_async=True)
+
+# ------------------- Async TTS Function -------------------
+
 async def synthesize_voice(
     text: str,
     gender: str = "male",
@@ -90,9 +100,8 @@ async def synthesize_voice(
 ) -> str:
     """
     - Calls ElevenLabs API for speech synthesis
-    - Encodes Base64 (kept in case needed)
-    - Uploads raw audio to Supabase Storage
-    - Returns the public URL to the audio
+    - Uploads audio to Supabase Storage asynchronously
+    - Returns a signed public URL to the audio
     """
     # -------- Voice Selection --------
     voice_opts = LANG_VOICE_MAP.get(lang, DEFAULT_VOICE_MAP)
@@ -103,7 +112,10 @@ async def synthesize_voice(
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     payload = {
         "text": text,
-        "voice_settings": {"stability": settings["stability"], "similarity_boost": settings["similarity_boost"]},
+        "voice_settings": {
+            "stability": settings["stability"],
+            "similarity_boost": settings["similarity_boost"]
+        },
         "generation_config": {"language": lang}
     }
 
@@ -117,27 +129,22 @@ async def synthesize_voice(
                 raise Exception(f"TTS error: {resp.status} {await resp.text()}")
             audio_bytes = await resp.read()
 
-    # -------- Encode to Base64 (if you still want it in logs/db) --------
-    _base64_copy = base64.b64encode(audio_bytes).decode("utf-8")
-
-    # -------- Upload to Supabase Storage --------
+    # -------- Generate filename --------
     filename = f"{uuid.uuid4()}.mp3"
-    upload_response = storage.from_(SUPABASE_BUCKET).upload(filename, audio_bytes)
 
+    # -------- Async upload to Supabase --------
+    upload_response = await storage.from_(SUPABASE_BUCKET).upload(filename, audio_bytes)
     if "error" in upload_response and upload_response["error"]:
         raise Exception(f"Supabase upload failed: {upload_response['error']}")
 
-    # -------- Generate Signed URL (valid for 3600 sec = 1 hour) --------
-    signed_url_response = storage.from_(SUPABASE_BUCKET).create_signed_url(filename, 3600)
+    # -------- Async generate signed URL (1 hour) --------
+    signed_url_response = await storage.from_(SUPABASE_BUCKET).create_signed_url(filename, 3600)
     signed_url = signed_url_response.get("signedURL") or signed_url_response.get("signed_url")
     if not signed_url:
         raise Exception(f"Signed URL generation failed: {signed_url_response}")
 
-    # Ensure full URL (sometimes SDK gives relative path)
+    # -------- Ensure full URL --------
     if not signed_url.startswith("http"):
         signed_url = f"{SUPABASE_URL}{signed_url}"
 
     return signed_url
-
-
-
