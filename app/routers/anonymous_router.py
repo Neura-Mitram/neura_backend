@@ -2,8 +2,8 @@
 # This file is part of the Neura - Your Smart Assistant project.
 # Licensed under the MIT License - see the LICENSE file for details.
 
-
 from fastapi import APIRouter, Depends, HTTPException, Header
+import logging
 from typing import Dict
 import os, json
 from pathlib import Path
@@ -15,7 +15,7 @@ from app.models.user import User, TierLevel
 from more_itertools import chunked  
 from app.utils.auth_utils import ensure_token_user_match, require_token
 
-from app.utils.jwt_utils import create_access_token  #✅ JWT added
+from app.utils.jwt_utils import create_access_token
 from app.schemas.user_schemas import (
     OnboardingUpdateRequest,
     LoginRequest,
@@ -30,6 +30,7 @@ from app.schemas.user_schemas import (
 from app.utils.audio_processor import synthesize_voice
 from app.services.translation_service import translate
 
+logger = logging.getLogger("update_onboarding")
 
 router = APIRouter(prefix="/auth", tags=["Anonymous Auth"])
 
@@ -42,7 +43,9 @@ def get_db():
         db.close()
 
 
-
+#---------------------------------------------------
+# Anonymous Login
+#---------------------------------------------------
 @router.post("/anonymous-login")
 def anonymous_login(payload: LoginRequest, db: Session = Depends(get_db)):
     device_id = payload.device_id
@@ -62,10 +65,7 @@ def anonymous_login(payload: LoginRequest, db: Session = Depends(get_db)):
             }
         }
 
-    new_user = User(
-        temp_uid=device_id,
-        is_verified=True
-    )
+    new_user = User(temp_uid=device_id, is_verified=True)
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
@@ -84,7 +84,9 @@ def anonymous_login(payload: LoginRequest, db: Session = Depends(get_db)):
     }
 
 
-
+#---------------------------------------------------
+# Update Onboarding
+#---------------------------------------------------
 @router.post("/update-onboarding")
 async def update_onboarding(
     payload: OnboardingUpdateRequest,
@@ -103,7 +105,7 @@ async def update_onboarding(
     if payload.voice and payload.voice not in ["male", "female"]:
         raise HTTPException(status_code=400, detail="Invalid voice option")
 
-    # ✅ Update onboarding fields
+    # Update onboarding fields
     if payload.ai_name:
         user.ai_name = payload.ai_name
     if payload.voice:
@@ -113,22 +115,22 @@ async def update_onboarding(
 
     db.commit()
 
-    # ✅ Wakeword instruction text
+    # Wakeword instruction text
     base_instruction = "Please record your wake word 3 times so Neura can activate by voice. Example: 'Hey Neura or Neura Baby'."
     user_lang = user.preferred_lang or "en"
+    translated_text = translate(base_instruction, source_lang="en", target_lang=user_lang) if user_lang != "en" else base_instruction
 
-    if user_lang != "en":
-        translated_text = translate(base_instruction, source_lang="en", target_lang=user_lang)
-    else:
-        translated_text = base_instruction
-
-    # ✅ Await async TTS
-    stream_url = await synthesize_voice(
-        text=translated_text,
-        gender=user.voice if user.voice in ["male", "female"] else "female",
-        emotion="joy",
-        lang=user_lang
-    )
+    # Robust TTS call with logging
+    stream_url = None
+    try:
+        stream_url = await synthesize_voice(
+            text=translated_text,
+            gender=user.voice if user.voice in ["male", "female"] else "female",
+            emotion="joy",
+            lang=user_lang
+        )
+    except Exception as e:
+        logger.error("TTS failed for device_id=%s, user=%s", user.temp_uid, user_data["sub"], exc_info=e)
 
     return {
         "message": "✅ Onboarding updated successfully",
@@ -138,21 +140,16 @@ async def update_onboarding(
         "preferred_lang": user.preferred_lang,
         "next_step": "WakeWord Setup",
         "wakeword_instruction": translated_text,
-        "audio_stream_url": stream_url,  # 🔊 for Flutter autoplay
+        "audio_stream_url": stream_url,  # None if TTS failed
     }
 
 
-
 #---------------------------------------------------
+# Translation Caching & UI Translation
 #---------------------------------------------------
-
-
-# ✅ Use a writable and persistent location
 CACHE_ROOT = Path(os.getenv("HF_HOME", "/data"))
 CACHE_DIR = CACHE_ROOT / "translation_cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-
 
 def _get_lang_cache_path(lang: str) -> Path:
     return CACHE_DIR / f"{lang}.json"
@@ -183,18 +180,13 @@ async def translate_ui_texts(
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
 
-    # ✅ Save preferred language
     user.preferred_lang = payload.target_lang
     db.commit()
 
-    # ✅ Load existing cache
     lang_cache = _load_lang_cache(payload.target_lang)
     translations: Dict[str, str] = {}
-
-    # ✅ Find strings that are not already cached
     missing_texts = [txt for txt in payload.strings if txt not in lang_cache]
 
-    # ✅ Translate only missing strings (batched in 50s)
     if missing_texts:
         for batch in chunked(missing_texts, 50):
             batch_results = await asyncio.gather(*[
@@ -207,7 +199,6 @@ async def translate_ui_texts(
     
         _save_lang_cache(payload.target_lang, lang_cache)
 
-    # ✅ Combine cache and new ones
     for txt in payload.strings:
         translations[txt] = lang_cache.get(txt, txt)
 
@@ -217,9 +208,10 @@ async def translate_ui_texts(
         "translations": translations
     }
 
-#---------------------------------------------------
-#---------------------------------------------------
 
+#---------------------------------------------------
+# Profile
+#---------------------------------------------------
 @router.post("/profile")
 def get_profile(payload: ProfileRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
     ensure_token_user_match(user_data["sub"], payload.device_id)
@@ -239,7 +231,9 @@ def get_profile(payload: ProfileRequest, db: Session = Depends(get_db), user_dat
     }
 
 
-
+#---------------------------------------------------
+# Change User Language
+#---------------------------------------------------
 @router.post("/change-user-language")
 def change_user_lang(payload: UserLangRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
     ensure_token_user_match(user_data["sub"], payload.device_id)
@@ -248,17 +242,18 @@ def change_user_lang(payload: UserLangRequest, db: Session = Depends(get_db), us
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
 
-    # Update language
     user.preferred_lang = payload.preferred_lang
     db.commit()
 
-    # Return response
     return {
-            "message": "Language updated successfully.",
-            "preferred_lang": user.preferred_lang,
-        }
+        "message": "Language updated successfully.",
+        "preferred_lang": user.preferred_lang,
+    }
 
 
+#---------------------------------------------------
+# Upgrade Tier
+#---------------------------------------------------
 @router.post("/upgrade-tier")
 def upgrade_anonymous_tier(payload: TierUpgradeRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
     ensure_token_user_match(user_data["sub"], payload.device_id)
@@ -285,7 +280,9 @@ def upgrade_anonymous_tier(payload: TierUpgradeRequest, db: Session = Depends(ge
     }
 
 
-
+#---------------------------------------------------
+# Downgrade Tier
+#---------------------------------------------------
 @router.post("/downgrade-tier")
 def downgrade_tier(payload: TierDowngradeRequest, db: Session = Depends(get_db), user_data: dict = Depends(require_token)):
     ensure_token_user_match(user_data["sub"], payload.device_id)
