@@ -5,6 +5,7 @@
 import os
 import logging
 import requests
+from time import sleep
 
 # ---------------------------
 # ✅ Logger Setup
@@ -22,48 +23,66 @@ if os.getenv("ENV") != "production":
     load_dotenv()
 
 HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
-MODEL_ID = os.getenv("LLM_MODEL", "sshleifer/tiny-gpt2")
+SPACE_URL = os.getenv(
+    "LLM_SPACE_URL",
+    "https://hf.space/embed/deepseek-ai/deepseek-vl2-small/api/predict"
+)
 
 # ---------------------------
-# ✅ Hugging Face Inference API
+# ✅ Headers
 # ---------------------------
 
-API_URL = f"https://api-inference.huggingface.co/models/{MODEL_ID}"
-HEADERS = {
-    "Authorization": f"Bearer {HF_TOKEN}",
-    "Content-Type": "application/json"
-}
+HEADERS = {"Content-Type": "application/json"}
+if HF_TOKEN:
+    HEADERS["Authorization"] = f"Bearer {HF_TOKEN}"
 
+# ---------------------------
+# ✅ Hugging Face Space Function
+# ---------------------------
 
 def get_mistral_reply(prompt: str) -> str:
-    """Send a prompt to Hugging Face Inference API and return the generated text."""
+    """
+    Send a prompt to the DeepSeek Hugging Face Space and return the generated text.
+    Function name kept unchanged for backward compatibility.
+    Retries once in case of temporary failures.
+    """
 
-    if not HF_TOKEN:
-        logger.error("❌ Missing Hugging Face token.")
-        return "⚠️ AI token not found."
+    if not SPACE_URL:
+        logger.error("❌ Missing Hugging Face Space URL.")
+        return "⚠️ AI Space URL not configured."
 
-    try:
-        logger.info(f"🔁 Sending prompt to Hugging Face: {MODEL_ID}")
-        response = requests.post(
-            API_URL,
-            headers=HEADERS,
-            json={"inputs": prompt}
-        )
+    try_count = 0
+    max_retries = 2
 
-        response.raise_for_status()
-        result = response.json()
+    while try_count < max_retries:
+        try:
+            logger.info(f"🔁 Sending prompt to Hugging Face Space: {SPACE_URL}")
+            response = requests.post(
+                SPACE_URL,
+                headers=HEADERS,
+                json={"data": [prompt]},
+                timeout=30
+            )
 
-        if isinstance(result, list) and "generated_text" in result[0]:
-            generated = result[0]["generated_text"]
-            return generated[len(prompt):].strip() if generated.startswith(prompt) else generated.strip()
-        else:
-            logger.warning("⚠️ Unexpected response format.")
-            return "⚠️ Unexpected AI response format."
+            response.raise_for_status()
+            result = response.json()
 
-    except requests.exceptions.RequestException as e:
-        logger.exception("❌ API request failed.")
-        return "⚠️ AI is currently unreachable. Please try again later."
+            # Parse the Space response
+            if "data" in result and isinstance(result["data"], list):
+                return result["data"][0]
+            else:
+                logger.warning("⚠️ Unexpected Space response format: %s", result)
+                return "⚠️ Unexpected AI response format."
 
-    except Exception as e:
-        logger.exception("❌ Unexpected error in AI response.")
-        return "⚠️ AI couldn't process your request."
+        except requests.exceptions.RequestException as e:
+            try_count += 1
+            logger.warning("⚠️ API request failed (attempt %d/%d). Retrying...", try_count, max_retries)
+            sleep(1)  # brief pause before retry
+
+            if try_count == max_retries:
+                logger.exception("❌ Space API request failed after retries.")
+                return "⚠️ AI is currently unreachable. Please try again later."
+
+        except Exception as e:
+            logger.exception("❌ Unexpected error in AI response.")
+            return "⚠️ AI couldn't process your request."
