@@ -26,19 +26,20 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
-
 def _call_emotion_api(text: str) -> str:
     try:
         response = requests.post(API_URL, headers=HEADERS, json={"inputs": text})
         response.raise_for_status()
         result = response.json()
 
-        if isinstance(result, list) and "label" in result[0]:
-            label = result[0]["label"].lower()
+        if isinstance(result, list) and len(result) > 0 and isinstance(result[0], list):
+            predictions = result[0]
+            top = max(predictions, key=lambda x: x.get("score", 0))
+            label = top["label"].lower()
             valid = ["joy", "anger", "fear", "sadness", "love", "surprise"]
             return label if label in valid else "unknown"
         else:
-            logger.warning("⚠️ Unexpected emotion API response format.")
+            logger.warning(f"⚠️ Unexpected emotion API response format: {result}")
             return "unknown"
     except Exception as e:
         logger.warning(f"❌ Emotion API call failed: {e}")
